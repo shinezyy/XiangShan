@@ -317,7 +317,11 @@ class ICache extends ICacheModule
   s2_access_fault := (s2_tlb_resp.paddr < accessBorder.U) && s2_valid
 
   // SRAM(Meta and Data) read reseponse
-  val metas = metaArray.io.readResp
+  // TODO :ECC wrong excetion
+  val metas = VecInit(metaArray.io.readResp.map(wayMeta => 
+      cacheParams.tagCode.decode(wayMeta).corrected
+    )
+  )
   val datas =RegEnable(next=dataArray.io.readResp, enable=s2_fire)
 
   val validMeta = Cat((0 until nWays).map{w => validArray(Cat(s2_idx, w.U(log2Ceil(nWays).W)))}.reverse).asUInt
