@@ -11,6 +11,7 @@ import xiangshan.frontend._
 import xiangshan.mem._
 import xiangshan.backend.fu.HasExceptionNO
 import xiangshan.cache.{DCache, DCacheParameters, ICache, ICacheParameters, L1plusCache, L1plusCacheParameters, PTW, Uncache}
+import xiangshan.cache.prefetch._
 import chipsalliance.rocketchip.config
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import freechips.rocketchip.tilelink.{TLBuffer, TLBundleParameters, TLCacheCork, TLClientNode, TLFilter, TLIdentityNode, TLToAXI4, TLWidthWidget, TLXbar}
@@ -48,6 +49,8 @@ case class XSCoreParameters
   CacheLineSize: Int = 512,
   UBtbWays: Int = 16,
   BtbWays: Int = 2,
+
+  EnableL1plusPrefetcher: Boolean = true,
   IBufSize: Int = 32,
   DecodeWidth: Int = 6,
   RenameWidth: Int = 6,
@@ -136,6 +139,7 @@ trait HasXSParameter {
   val ExtHistoryLength = HistoryLength + 64
   val UBtbWays = core.UBtbWays
   val BtbWays = core.BtbWays
+  val EnableL1plusPrefetcher = core.EnableL1plusPrefetcher
   val IBufSize = core.IBufSize
   val DecodeWidth = core.DecodeWidth
   val RenameWidth = core.RenameWidth
@@ -177,6 +181,32 @@ trait HasXSParameter {
     tagECC = Some("secded"),
     dataECC = Some("secded"),
     nMissEntries = 8
+  )
+
+  // icache prefetcher
+  val l1plusPrefetcherParameters = L1plusPrefetcherParameters(
+    enable = false,
+    _type = "stream",
+    streamParams = StreamPrefetchParameters(
+      streamCnt = 4,
+      streamSize = 4,
+      ageWidth = 4,
+      blockBytes = l1plusCacheParameters.blockBytes,
+      reallocStreamOnMissInstantly = true
+    )
+  )
+
+  // dcache prefetcher
+  val l2PrefetcherParameters = L2PrefetcherParameters(
+    enable = true,
+    _type = "stream",
+    streamParams = StreamPrefetchParameters(
+      streamCnt = 4,
+      streamSize = 4,
+      ageWidth = 4,
+      blockBytes = L2BlockSize,
+      reallocStreamOnMissInstantly = true
+    )
   )
 
   val dcacheParameters = DCacheParameters(
@@ -280,6 +310,7 @@ class XSCore()(implicit p: config.Parameters) extends LazyModule
   // outer facing nodes
   val l1pluscache = LazyModule(new L1plusCache())
   val ptw = LazyModule(new PTW())
+  val l2Prefetcher = LazyModule(new L2Prefetcher())
   val memBlock = LazyModule(new MemBlock(
     fastWakeUpIn = intBlockFastWakeUpInt ++ intBlockFastWakeUpFp ++ fpBlockFastWakeUpInt ++ fpBlockFastWakeUpFp,
     slowWakeUpIn = intBlockSlowWakeUpInt ++ intBlockSlowWakeUpFp ++ fpBlockSlowWakeUpInt ++ fpBlockSlowWakeUpFp,
@@ -335,6 +366,7 @@ class XSCoreImp(outer: XSCore) extends LazyModuleImp(outer)
   val memBlock = outer.memBlock.module
   val l1pluscache = outer.l1pluscache.module
   val ptw = outer.ptw.module
+  val l2Prefetcher = outer.l2Prefetcher.module
 
   frontend.io.backend <> ctrlBlock.io.frontend
   frontend.io.sfence <> integerBlock.io.fenceio.sfence
@@ -393,6 +425,7 @@ class XSCoreImp(outer: XSCore) extends LazyModuleImp(outer)
   integerBlock.io.csrio.memExceptionVAddr <> memBlock.io.lsqio.exceptionAddr.vaddr
   integerBlock.io.csrio.externalInterrupt <> io.externalInterrupt
   integerBlock.io.csrio.tlb <> memBlock.io.tlbCsr
+  integerBlock.io.csrio.perfinfo <> ctrlBlock.io.roqio.toCSR.perfinfo
   integerBlock.io.fenceio.sfence <> memBlock.io.sfence
   integerBlock.io.fenceio.sbuffer <> memBlock.io.fenceToSbuffer
 
@@ -408,6 +441,8 @@ class XSCoreImp(outer: XSCore) extends LazyModuleImp(outer)
   ptw.io.tlb(1) <> frontend.io.ptw
   ptw.io.sfence <> integerBlock.io.fenceio.sfence
   ptw.io.csr    <> integerBlock.io.csrio.tlb
+
+  l2Prefetcher.io.in <> memBlock.io.toDCachePrefetch
 
   if (!env.FPGAPlatform) {
     val debugIntReg, debugFpReg = WireInit(VecInit(Seq.fill(32)(0.U(XLEN.W))))

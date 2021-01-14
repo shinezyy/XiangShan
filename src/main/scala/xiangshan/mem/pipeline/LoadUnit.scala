@@ -280,6 +280,7 @@ class LoadUnit extends XSModule with HasLoadHelper {
   intHitLoadOut.bits.redirect := DontCare
   intHitLoadOut.bits.brUpdate := DontCare
   intHitLoadOut.bits.debug.isMMIO := load_s2.io.out.bits.mmio
+  intHitLoadOut.bits.debug.isPerfCnt := false.B
   intHitLoadOut.bits.fflags := DontCare
 
   load_s2.io.out.ready := true.B
@@ -299,7 +300,7 @@ class LoadUnit extends XSModule with HasLoadHelper {
   val fpLoadOutReg = RegNext(fpLoadOut)
   io.fpout.bits := fpLoadOutReg.bits
   io.fpout.bits.data := fpRdataHelper(fpLoadOutReg.bits.uop, fpLoadOutReg.bits.data) // recode
-  io.fpout.valid := RegNext(fpLoadOut.valid && !load_s2.io.out.bits.uop.roqIdx.needFlush(io.redirect))
+  io.fpout.valid := RegNext(fpLoadOut.valid)
 
   io.lsq.ldout.ready := Mux(refillFpLoad, !fpHitLoadOut.valid, !intHitLoadOut.valid)
 
