@@ -99,7 +99,11 @@ class LTBColumn extends LTBModule {
     
     // val mem = RegInit(0.U.asTypeOf(Vec(nRows, new LoopEntry)))
     val mem = Mem(nRows, new LoopEntry)
-    io.rdata  := mem(io.rIdx)
+    val rdata = WireInit(mem(io.rIdx))
+    io.rdata  := rdata
+    when(rdata.specCnt >= rdata.tripCnt) {
+      io.rdata.specCnt := rdata.specCnt - rdata.tripCnt
+    }
     io.urdata := mem(io.urIdx)
     val wdata = WireInit(io.wdata)
     val swdata = WireInit(io.swdata)
@@ -402,12 +406,13 @@ class LoopPredictor extends BasePredictor with LTBParams {
     ltbs(i).io.update.bits.meta := io.update.bits.bpuMeta.specCnt
     ltbs(i).io.update.bits.taken := io.update.bits.taken
     ltbs(i).io.update.bits.brTag := io.update.bits.brTag
-    ltbs(i).io.repair := RegNext(i.U =/= updateBank && io.update.valid && io.update.bits.isMisPred)
+    ltbs(i).io.repair := RegNext(i.U =/= updateBank && io.update.valid && (io.update.bits.isMisPred || io.update.bits.isReplay))
   }
 
   // if4
   val if3_fire = io.if3_fire
-  val inMask = io.inMask // This is if4_mask
+  // val inMask = io.inMask // This is if4_mask
+  val inMask = io.inMask & (((UIntToOH(io.respIn.jmpIdx)(PredictWidth-1, 0) - 1.U(1.W))<<1)|1.U(1.W))
 
   for (i <- 0 until PredictWidth) {
     ltbs(i).io.req.pc := packetAlignedPC
@@ -430,6 +435,7 @@ class LoopPredictor extends BasePredictor with LTBParams {
     XSDebug("[IF3][req] fire=%d fetchpc=%x\n", if3_fire, pc)
     XSDebug("[IF4][req] fire=%d bank=%d packetAlignedPC=%x bankIdx=%x tag=%x\n", out_fire, bank, packetAlignedPC, bankIdx, tag)
     XSDebug("[IF4][req] inMask=%b\n", inMask)
+    XSDebug("jmpIdx=%d, jmpMask=%b\n", io.respIn.jmpIdx, (((UIntToOH(io.respIn.jmpIdx)(PredictWidth-1, 0) - 1.U(1.W))<<1)|1.U(1.W)))
 
     XSDebug("[IF4][req] updatePC=%x updateBank=%d, updateValid=%d, isBr=%d, isReplay=%d\n", updatePC, updateBank, io.update.valid, io.update.bits.pd.isBr, io.update.bits.isReplay)
     XSDebug("[IF4][req] isMisPred=%d updateSpecCnt=%d, taken=%d\n", io.update.bits.isMisPred, io.update.bits.bpuMeta.specCnt, io.update.bits.taken)
