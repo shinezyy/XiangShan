@@ -80,6 +80,8 @@ class MemBlockImp
       val commits = Flipped(new RoqCommitIO) // to lsq
       val roqDeqPtr = Input(new RoqPtr) // to lsq
     }
+
+    val toDCachePrefetch = DecoupledIO(new MissReq)
   })
 
   val dcache = outer.dcache.module
@@ -248,6 +250,7 @@ class MemBlockImp
 
   // LSQ to store buffer
   lsq.io.sbuffer        <> sbuffer.io.in
+  lsq.io.sqempty        <> sbuffer.io.sqempty
 
   // Sbuffer
   sbuffer.io.dcache     <> dcache.io.lsu.store
@@ -327,4 +330,6 @@ class MemBlockImp
   lsq.io.exceptionAddr.lsIdx  := io.lsqio.exceptionAddr.lsIdx
   lsq.io.exceptionAddr.isStore := io.lsqio.exceptionAddr.isStore
   io.lsqio.exceptionAddr.vaddr := Mux(atomicsUnit.io.exceptionAddr.valid, atomicsUnit.io.exceptionAddr.bits, lsq.io.exceptionAddr.vaddr)
+
+  io.toDCachePrefetch <> dcache.io.prefetch
 }

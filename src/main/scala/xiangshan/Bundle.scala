@@ -6,7 +6,7 @@ import xiangshan.backend.SelImm
 import xiangshan.backend.brq.BrqPtr
 import xiangshan.backend.rename.FreeListPtr
 import xiangshan.backend.roq.RoqPtr
-import xiangshan.backend.decode.XDecode
+import xiangshan.backend.decode.{ImmUnion, XDecode}
 import xiangshan.mem.{LqPtr, SqPtr}
 import xiangshan.frontend.PreDecodeInfo
 import xiangshan.frontend.HasBPUParameter
@@ -14,6 +14,7 @@ import xiangshan.frontend.HasTageParameter
 import xiangshan.frontend.HasIFUConst
 import xiangshan.frontend.GlobalHistory
 import utils._
+
 import scala.math.max
 import Chisel.experimental.chiselName
 
@@ -141,6 +142,8 @@ class BpuMeta extends XSBundle with HasBPUParameter {
   val debug_btb_cycle  = if (EnableBPUTimeRecord) UInt(64.W) else UInt(0.W)
   val debug_tage_cycle = if (EnableBPUTimeRecord) UInt(64.W) else UInt(0.W)
 
+  val predictor = if (BPUDebug) UInt(log2Up(4).W) else UInt(0.W) // Mark which component this prediction comes from {ubtb, btb, tage, loopPredictor}
+
   // def apply(histPtr: UInt, tageMeta: TageMeta, rasSp: UInt, rasTopCtr: UInt) = {
   //   this.histPtr := histPtr
   //   this.tageMeta := tageMeta
@@ -159,7 +162,7 @@ class Predecode extends XSBundle with HasIFUConst {
   val pd = Vec(PredictWidth, (new PreDecodeInfo))
 }
 
-class CfiUpdateInfo extends XSBundle {
+class CfiUpdateInfo extends XSBundle with HasBPUParameter {
   // from backend
   val pc = UInt(VAddrBits.W)
   val pnpc = UInt(VAddrBits.W)
@@ -181,7 +184,7 @@ class CfiUpdateInfo extends XSBundle {
 class CtrlFlow extends XSBundle {
   val instr = UInt(32.W)
   val pc = UInt(VAddrBits.W)
-  val exceptionVec = Vec(16, Bool())
+  val exceptionVec = ExceptionVec()
   val intrVec = Vec(12, Bool())
   val brUpdate = new CfiUpdateInfo
   val crossPageIPFFix = Bool()
@@ -219,7 +222,7 @@ class CtrlSignals extends XSBundle {
   val flushPipe  = Bool()  // This inst will flush all the pipe when commit, like exception but can commit
   val isRVF = Bool()
   val selImm = SelImm()
-  val imm = UInt(XLEN.W)
+  val imm = UInt(ImmUnion.maxLen.W)
   val commitType = CommitType()
   val fpu = new FPUCtrlSignals
 
@@ -240,6 +243,16 @@ class CfCtrl extends XSBundle {
   val brTag = new BrqPtr
 }
 
+class PerfDebugInfo extends XSBundle {
+  // val fetchTime = UInt(64.W)
+  val renameTime = UInt(64.W)
+  val dispatchTime = UInt(64.W)
+  val issueTime = UInt(64.W)
+  val writebackTime = UInt(64.W)
+  // val commitTime = UInt(64.W)
+}
+
+// Separate LSQ
 class LSIdx extends XSBundle {
   val lqIdx = new LqPtr
   val sqIdx = new SqPtr
@@ -253,6 +266,7 @@ class MicroOp extends CfCtrl {
   val lqIdx = new LqPtr
   val sqIdx = new SqPtr
   val diffTestDebugLrScValid = Bool()
+  val debugInfo = new PerfDebugInfo
 }
 
 class Redirect extends XSBundle {
@@ -283,6 +297,7 @@ class ReplayPregReq extends XSBundle {
 
 class DebugBundle extends XSBundle{
   val isMMIO = Bool()
+  val isPerfCnt = Bool()
 }
 
 class ExuInput extends XSBundle {

@@ -38,6 +38,9 @@ class RoqCSRIO extends XSBundle {
 
   val fflags = Output(Valid(UInt(5.W)))
   val dirty_fs = Output(Bool())
+  val perfinfo = new Bundle {
+    val retiredInstr = Output(UInt(3.W))
+  }
 }
 
 class RoqEnqIO extends XSBundle {
@@ -51,12 +54,9 @@ class RoqEnqIO extends XSBundle {
 
 class RoqDispatchData extends RoqCommitInfo {
   val crossPageIPFFix = Bool()
-  val exceptionVec = Vec(16, Bool())
 }
 
 class RoqWbData extends XSBundle {
-  // mostly for exceptions
-  val exceptionVec = Vec(16, Bool())
   val fflags = UInt(5.W)
   val flushPipe = Bool()
 }
@@ -67,7 +67,7 @@ class RoqDeqPtrWrapper extends XSModule with HasCircularQueuePtrHelper {
     val state = Input(UInt(2.W))
     val deq_v = Vec(CommitWidth, Input(Bool()))
     val deq_w = Vec(CommitWidth, Input(Bool()))
-    val deq_exceptionVec = Vec(CommitWidth, Input(UInt(16.W)))
+    val deq_exceptionVec = Vec(CommitWidth, Input(ExceptionVec()))
     val deq_flushPipe = Vec(CommitWidth, Input(Bool()))
     // for flush: when exception occurs, reset deqPtrs to range(0, CommitWidth)
     val intrBitSetReg = Input(Bool())
@@ -75,32 +75,38 @@ class RoqDeqPtrWrapper extends XSModule with HasCircularQueuePtrHelper {
     val commitType = Input(CommitType())
     // output: the CommitWidth deqPtr
     val out = Vec(CommitWidth, Output(new RoqPtr))
+    val next_out = Vec(CommitWidth, Output(new RoqPtr))
   })
 
   val deqPtrVec = RegInit(VecInit((0 until CommitWidth).map(_.U.asTypeOf(new RoqPtr))))
 
+  val possibleException = VecInit(io.deq_exceptionVec.map(selectAll(_, false)))
   // for exceptions (flushPipe included) and interrupts:
   // only consider the first instruction
   val intrEnable = io.intrBitSetReg && !io.hasNoSpecExec && !CommitType.isLoadStore(io.commitType)
-  val exceptionEnable = io.deq_w(0) && (io.deq_exceptionVec(0).orR || io.deq_flushPipe(0))
+  val exceptionEnable = io.deq_w(0) && (possibleException(0).asUInt.orR || io.deq_flushPipe(0))
   val redirectOutValid = io.state === 0.U && io.deq_v(0) && (intrEnable || exceptionEnable)
 
   // for normal commits: only to consider when there're no exceptions
   // we don't need to consider whether the first instruction has exceptions since it wil trigger exceptions.
-  val commitBlocked = VecInit((0 until CommitWidth).map(i => if (i == 0) false.B else io.deq_exceptionVec(i).orR || io.deq_flushPipe(i)))
+  val commitBlocked = VecInit((0 until CommitWidth).map(i => if (i == 0) false.B else possibleException(i).asUInt.orR || io.deq_flushPipe(i)))
   val canCommit = VecInit((0 until CommitWidth).map(i => io.deq_v(i) && io.deq_w(i) && !commitBlocked(i)))
   val normalCommitCnt = PriorityEncoder(canCommit.map(c => !c) :+ true.B)
   // when io.intrBitSetReg, only one instruction is allowed to commit
   val commitCnt = Mux(io.intrBitSetReg, io.deq_v(0) && io.deq_w(0), normalCommitCnt)
 
-  when (redirectOutValid) {
-    deqPtrVec := VecInit((0 until CommitWidth).map(_.U.asTypeOf(new RoqPtr)))
-  }.elsewhen (io.state === 0.U) {
-    deqPtrVec := deqPtrVec.map(_ + commitCnt)
+  val resetDeqPtrVec = VecInit((0 until CommitWidth).map(_.U.asTypeOf(new RoqPtr)))
+  val commitDeqPtrVec = VecInit(deqPtrVec.map(_ + commitCnt))
+  val deqPtrVec_next = Mux(redirectOutValid, resetDeqPtrVec, Mux(io.state === 0.U, commitDeqPtrVec, deqPtrVec))
+
+  deqPtrVec := deqPtrVec_next
+
+  io.next_out := deqPtrVec_next
+  io.out      := deqPtrVec
+
+  when (io.state === 0.U) {
     XSInfo(io.state === 0.U && commitCnt > 0.U, "retired %d insts\n", commitCnt)
   }
-
-  io.out := deqPtrVec
 
 }
 
@@ -110,7 +116,7 @@ class RoqEnqPtrWrapper extends XSModule with HasCircularQueuePtrHelper {
     val state = Input(UInt(2.W))
     val deq_v = Input(Bool())
     val deq_w = Input(Bool())
-    val deq_exceptionVec = Input(UInt(16.W))
+    val deq_exceptionVec = Input(ExceptionVec())
     val deq_flushPipe = Input(Bool())
     val intrBitSetReg = Input(Bool())
     val hasNoSpecExec = Input(Bool())
@@ -129,7 +135,7 @@ class RoqEnqPtrWrapper extends XSModule with HasCircularQueuePtrHelper {
   // for exceptions (flushPipe included) and interrupts:
   // only consider the first instruction
   val intrEnable = io.intrBitSetReg && !io.hasNoSpecExec && !CommitType.isLoadStore(io.commitType)
-  val exceptionEnable = io.deq_w && (io.deq_exceptionVec.orR || io.deq_flushPipe)
+  val exceptionEnable = io.deq_w && (selectAll(io.deq_exceptionVec, false).asUInt.orR || io.deq_flushPipe)
   val redirectOutValid = io.state === 0.U && io.deq_v && (intrEnable || exceptionEnable)
 
   // enqueue
@@ -250,34 +256,13 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     * (1) read: commits/walk/exception
     * (2) write: write back from exe units
     */
-  val dispatchData = Module(new AsyncDataModuleTemplate(new RoqDispatchData, RoqSize, CommitWidth, RenameWidth))
+  val dispatchData = Module(new SyncDataModuleTemplate(new RoqDispatchData, RoqSize, CommitWidth, RenameWidth))
   val dispatchDataRead = dispatchData.io.rdata
 
-  val writebackData = Module(new AsyncDataModuleTemplate(new RoqWbData, RoqSize, CommitWidth, numWbPorts))
+  val writebackData = Module(new SyncDataModuleTemplate(new RoqWbData, RoqSize, CommitWidth, numWbPorts))
   val writebackDataRead = writebackData.io.rdata
 
-  def mergeExceptionVec(dpData: RoqDispatchData, wbData: RoqWbData) = {
-    // these exceptions can be determined before dispatch.
-    // by default, let all exceptions be determined by dispatch.
-    // mergeVec(instrAddrMisaligned) := dpData(instrAddrMisaligned)
-    // mergeVec(instrAccessFault) := dpData(instrAccessFault)
-    // mergeVec(instrPageFault) := dpData(instrPageFault)
-    val mergeVec = WireInit(dpData.exceptionVec)
-    // these exceptions are determined in execution units
-    mergeVec(illegalInstr) := wbData.exceptionVec(illegalInstr)
-    mergeVec(breakPoint) := wbData.exceptionVec(breakPoint)
-    mergeVec(loadAddrMisaligned) := wbData.exceptionVec(loadAddrMisaligned)
-    mergeVec(loadAccessFault) := wbData.exceptionVec(loadAccessFault)
-    mergeVec(storeAddrMisaligned) := wbData.exceptionVec(storeAddrMisaligned)
-    mergeVec(storeAccessFault) := wbData.exceptionVec(storeAccessFault)
-    mergeVec(ecallU) := wbData.exceptionVec(ecallU)
-    mergeVec(ecallS) := wbData.exceptionVec(ecallS)
-    mergeVec(ecallM) := wbData.exceptionVec(ecallM)
-    mergeVec(loadPageFault) := wbData.exceptionVec(loadPageFault)
-    mergeVec(storePageFault) := wbData.exceptionVec(storePageFault)
-    // returns the merged exception vector
-    mergeVec
-  }
+  val exceptionDataRead = Wire(Vec(CommitWidth, ExceptionVec()))
 
   io.roqDeqPtr := deqPtr
 
@@ -329,6 +314,8 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
       debug_microOp(wbIdx).diffTestDebugLrScValid := io.exeWbResults(i).bits.uop.diffTestDebugLrScValid
       debug_exuData(wbIdx) := io.exeWbResults(i).bits.data
       debug_exuDebug(wbIdx) := io.exeWbResults(i).bits.debug
+      debug_microOp(wbIdx).debugInfo.issueTime := io.exeWbResults(i).bits.uop.debugInfo.issueTime
+      debug_microOp(wbIdx).debugInfo.writebackTime := io.exeWbResults(i).bits.uop.debugInfo.writebackTime
 
       val debug_Uop = debug_microOp(wbIdx)
       XSInfo(true.B,
@@ -349,7 +336,7 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   val deqWritebackData = writebackDataRead(0)
   val debug_deqUop = debug_microOp(deqPtr.value)
 
-  val deqExceptionVec = mergeExceptionVec(deqDispatchData, deqWritebackData)
+  val deqExceptionVec = exceptionDataRead(0)
   // For MMIO instructions, they should not trigger interrupts since they may be sent to lower level before it writes back.
   // However, we cannot determine whether a load/store instruction is MMIO.
   // Thus, we don't allow load/store instructions to trigger an interrupt.
@@ -359,9 +346,9 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   val isFlushPipe = writebacked(deqPtr.value) && deqWritebackData.flushPipe
   io.redirectOut := DontCare
   io.redirectOut.valid := (state === s_idle) && valid(deqPtr.value) && (intrEnable || exceptionEnable || isFlushPipe)
-  io.redirectOut.bits.level := Mux(isFlushPipe, RedirectLevel.flushAll, RedirectLevel.exception)
+  io.redirectOut.bits.level := Mux(intrEnable || exceptionEnable, RedirectLevel.exception, RedirectLevel.flushAll)
   io.redirectOut.bits.interrupt := intrEnable
-  io.redirectOut.bits.target := Mux(isFlushPipe, deqDispatchData.pc + 4.U, io.csr.trapTarget)
+  io.redirectOut.bits.target := Mux(intrEnable || exceptionEnable, io.csr.trapTarget, deqDispatchData.pc + 4.U)
 
   io.exception := debug_deqUop
   io.exception.ctrl.commitType := deqDispatchData.commitType
@@ -387,9 +374,13 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
 
   // extra space is used when roq has no enough space, but mispredict recovery needs such info to walk regmap
   require(RenameWidth <= CommitWidth)
-  val needExtraSpaceForMPR = VecInit((0 until RenameWidth).map(i => io.redirect.valid && io.enq.needAlloc(i)))
   val extraSpaceForMPR = Reg(Vec(RenameWidth, new RoqDispatchData))
   val usedSpaceForMPR = Reg(Vec(RenameWidth, Bool()))
+  when (io.enq.needAlloc.asUInt.orR && io.redirect.valid) {
+    usedSpaceForMPR := io.enq.needAlloc
+    extraSpaceForMPR := dispatchData.io.wdata
+    XSDebug("roq full, switched to s_extrawalk. needExtraSpaceForMPR: %b\n", io.enq.needAlloc.asUInt)
+  }
 
   // wiring to csr
   val (wflags, fpWen) = (0 until CommitWidth).map(i => {
@@ -407,7 +398,7 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   io.commits.isWalk := state =/= s_idle
   val commit_v = Mux(state === s_idle, VecInit(deqPtrVec.map(ptr => valid(ptr.value))), VecInit(walkPtrVec.map(ptr => valid(ptr.value))))
   val commit_w = VecInit(deqPtrVec.map(ptr => writebacked(ptr.value)))
-  val commit_exception = dispatchDataRead.zip(writebackDataRead).map{ case (d, w) => mergeExceptionVec(d, w).asUInt.orR }
+  val commit_exception = exceptionDataRead.map(_.asUInt.orR)
   val commit_block = VecInit((0 until CommitWidth).map(i => !commit_w(i) || commit_exception(i) || writebackDataRead(i).flushPipe))
   for (i <- 0 until CommitWidth) {
     // defaults: state === s_idle and instructions commit
@@ -421,7 +412,6 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     }.elsewhen(state === s_extrawalk) {
       io.commits.valid(i) := (if (i < RenameWidth) usedSpaceForMPR(RenameWidth-i-1) else false.B)
       io.commits.info(i)  := (if (i < RenameWidth) extraSpaceForMPR(RenameWidth-i-1) else DontCare)
-      state := s_walk
     }
 
     XSInfo(state === s_idle && io.commits.valid(i),
@@ -457,65 +447,23 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
 
 
   /**
-    * read and write of data modules
-    */
-  val commitReadAddr = Mux(state === s_idle, VecInit(deqPtrVec.map(_.value)), VecInit(walkPtrVec.map(_.value)))
-  dispatchData.io.wen := canEnqueue
-  dispatchData.io.waddr := enqPtrVec.map(_.value)
-  dispatchData.io.wdata.zip(io.enq.req.map(_.bits)).map{ case (wdata, req) =>
-    wdata.ldest := req.ctrl.ldest
-    wdata.rfWen := req.ctrl.rfWen
-    wdata.fpWen := req.ctrl.fpWen
-    wdata.wflags := req.ctrl.fpu.wflags
-    wdata.commitType := req.ctrl.commitType
-    wdata.pdest := req.pdest
-    wdata.old_pdest := req.old_pdest
-    wdata.lqIdx := req.lqIdx
-    wdata.sqIdx := req.sqIdx
-    wdata.pc := req.cf.pc
-    wdata.crossPageIPFFix := req.cf.crossPageIPFFix
-    wdata.exceptionVec := req.cf.exceptionVec
-  }
-  dispatchData.io.raddr := commitReadAddr
-
-  writebackData.io.wen := io.exeWbResults.map(_.valid)
-  writebackData.io.waddr := io.exeWbResults.map(_.bits.uop.roqIdx.value)
-  writebackData.io.wdata.zip(io.exeWbResults.map(_.bits)).map{ case (wdata, wb) =>
-    wdata.exceptionVec := wb.uop.cf.exceptionVec
-    wdata.fflags := wb.fflags
-    wdata.flushPipe := wb.uop.ctrl.flushPipe
-  }
-  writebackData.io.raddr := commitReadAddr
-
-
-
-  /**
     * state changes
-    * (1) redirect: from s_valid to s_walk or s_extrawalk (depends on whether there're pending instructions in dispatch1)
-    * (2) s_extrawalk to s_walk
-    * (3) s_walk to s_idle: end of walking
+    * (1) exceptions: when exception occurs, cancels all and switch to s_idle
+    * (2) redirect: switch to s_walk or s_extrawalk (depends on whether there're pending instructions in dispatch1)
+    * (3) walk: when walking comes to the end, switch to s_walk
+    * (4) s_extrawalk to s_walk
     */
-  //exit walk state when all roq entry is commited
-  when (state === s_walk && walkFinished) {
-    state := s_idle
-  }
-  // when redirect, walk back roq entries
-  when (io.redirect.valid) {
-    state := s_walk
-  }
-  // no enough space for walk, allocate extra space
-  when (needExtraSpaceForMPR.asUInt.orR && io.redirect.valid) {
-    usedSpaceForMPR := needExtraSpaceForMPR
-    extraSpaceForMPR := dispatchData.io.wdata
-
-    state := s_extrawalk
-    XSDebug("roq full, switched to s_extrawalk. needExtraSpaceForMPR: %b\n", needExtraSpaceForMPR.asUInt)
-  }
-  // when exception occurs, cancels all and switch to s_idle
-  when (io.redirectOut.valid) {
-    state := s_idle
-  }
-
+  val state_next = Mux(io.redirectOut.valid,
+    s_idle,
+    Mux(io.redirect.valid,
+      Mux(io.enq.needAlloc.asUInt.orR, s_extrawalk, s_walk),
+      Mux(state === s_walk && walkFinished,
+        s_idle,
+        Mux(state === s_extrawalk, s_walk, state)
+      )
+    )
+  )
+  state := state_next
 
   /**
     * pointers and counters
@@ -524,18 +472,19 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   deqPtrGenModule.io.state := state
   deqPtrGenModule.io.deq_v := commit_v
   deqPtrGenModule.io.deq_w := commit_w
-  deqPtrGenModule.io.deq_exceptionVec := VecInit(dispatchDataRead.zip(writebackDataRead).map{ case (d, w) => mergeExceptionVec(d, w).asUInt })
+  deqPtrGenModule.io.deq_exceptionVec := exceptionDataRead
   deqPtrGenModule.io.deq_flushPipe := writebackDataRead.map(_.flushPipe)
   deqPtrGenModule.io.intrBitSetReg := intrBitSetReg
   deqPtrGenModule.io.hasNoSpecExec := hasNoSpecExec
   deqPtrGenModule.io.commitType := deqDispatchData.commitType
   deqPtrVec := deqPtrGenModule.io.out
+  val deqPtrVec_next = deqPtrGenModule.io.next_out
 
   val enqPtrGenModule = Module(new RoqEnqPtrWrapper)
   enqPtrGenModule.io.state := state
   enqPtrGenModule.io.deq_v := commit_v(0)
   enqPtrGenModule.io.deq_w := commit_w(0)
-  enqPtrGenModule.io.deq_exceptionVec := deqExceptionVec.asUInt
+  enqPtrGenModule.io.deq_exceptionVec := deqExceptionVec
   enqPtrGenModule.io.deq_flushPipe := writebackDataRead(0).flushPipe
   enqPtrGenModule.io.intrBitSetReg := intrBitSetReg
   enqPtrGenModule.io.hasNoSpecExec := hasNoSpecExec
@@ -547,14 +496,17 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   enqPtr := enqPtrGenModule.io.out
 
   val thisCycleWalkCount = Mux(walkFinished, walkCounter, CommitWidth.U)
-  when (io.redirect.valid && state =/= s_extrawalk) {
-    walkPtrVec := Mux(state === s_walk,
+  // next walkPtrVec:
+  // (1) redirect occurs: update according to state
+  // (2) walk: move backwards
+  val walkPtrVec_next = Mux(io.redirect.valid && state =/= s_extrawalk,
+    Mux(state === s_walk,
       VecInit(walkPtrVec.map(_ - thisCycleWalkCount)),
       VecInit((0 until CommitWidth).map(i => enqPtr - (i+1).U))
-    )
-  }.elsewhen (state === s_walk) {
-    walkPtrVec := VecInit(walkPtrVec.map(_ - CommitWidth.U))
-  }
+    ),
+    Mux(state === s_walk, VecInit(walkPtrVec.map(_ - CommitWidth.U)), walkPtrVec)
+  )
+  walkPtrVec := walkPtrVec_next
 
   val lastCycleRedirect = RegNext(io.redirect.valid)
   val trueValidCounter = Mux(lastCycleRedirect, distanceBetween(enqPtr, deqPtr), validCounter)
@@ -595,6 +547,8 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     * All events: (1) enqueue (dispatch); (2) writeback; (3) cancel; (4) dequeue (commit);
     * All states: (1) valid; (2) writebacked; (3) flagBkup
     */
+  val commitReadAddr = Mux(state === s_idle, VecInit(deqPtrVec.map(_.value)), VecInit(walkPtrVec.map(_.value)))
+
   // enqueue logic writes 6 valid
   for (i <- 0 until RenameWidth) {
     when (canEnqueue(i) && !io.redirect.valid) {
@@ -623,7 +577,7 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
   // enqueue logic set 6 writebacked to false
   for (i <- 0 until RenameWidth) {
     when (canEnqueue(i)) {
-      writebacked(enqPtrVec(i).value) := false.B
+      writebacked(enqPtrVec(i).value) := selectFrontend(io.enq.req(i).bits.cf.exceptionVec, false).asUInt.orR
     }
   }
   // writeback logic set numWbPorts writebacked to true
@@ -640,6 +594,82 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     when (canEnqueue(i)) {
       flagBkup(enqPtrVec(i).value) := enqPtrVec(i).flag
     }
+  }
+
+
+  /**
+    * read and write of data modules
+    */
+  val commitReadAddr_next = Mux(state_next === s_idle,
+    VecInit(deqPtrVec_next.map(_.value)),
+    VecInit(walkPtrVec_next.map(_.value))
+  )
+  dispatchData.io.wen := canEnqueue
+  dispatchData.io.waddr := enqPtrVec.map(_.value)
+  dispatchData.io.wdata.zip(io.enq.req.map(_.bits)).map{ case (wdata, req) =>
+    wdata.ldest := req.ctrl.ldest
+    wdata.rfWen := req.ctrl.rfWen
+    wdata.fpWen := req.ctrl.fpWen
+    wdata.wflags := req.ctrl.fpu.wflags
+    wdata.commitType := req.ctrl.commitType
+    wdata.pdest := req.pdest
+    wdata.old_pdest := req.old_pdest
+    wdata.lqIdx := req.lqIdx
+    wdata.sqIdx := req.sqIdx
+    wdata.pc := req.cf.pc
+    wdata.crossPageIPFFix := req.cf.crossPageIPFFix
+    // wdata.exceptionVec := req.cf.exceptionVec
+  }
+  dispatchData.io.raddr := commitReadAddr_next
+
+  writebackData.io.wen := io.exeWbResults.map(_.valid)
+  writebackData.io.waddr := io.exeWbResults.map(_.bits.uop.roqIdx.value)
+  writebackData.io.wdata.zip(io.exeWbResults.map(_.bits)).map{ case (wdata, wb) =>
+    wdata.fflags := wb.fflags
+    wdata.flushPipe := wb.uop.ctrl.flushPipe
+  }
+  writebackData.io.raddr := commitReadAddr_next
+
+  for (i <- 0 until 16) {
+    val exceptionData = Module(new SyncDataModuleTemplate(Bool(), RoqSize, CommitWidth, RenameWidth + writebackCount(i)))
+    var wPortIdx = 0
+    for (j <- 0 until RenameWidth) {
+      exceptionData.io.wen  (wPortIdx) := canEnqueue(j)
+      exceptionData.io.waddr(wPortIdx) := enqPtrVec(j).value
+      exceptionData.io.wdata(wPortIdx) := (if (allPossibleSet.contains(i)) io.enq.req(j).bits.cf.exceptionVec(i) else false.B)
+      wPortIdx = wPortIdx + 1
+    }
+    if (csrWbCount(i) > 0) {
+      exceptionData.io.wen  (wPortIdx) := io.exeWbResults(6).valid
+      exceptionData.io.waddr(wPortIdx) := io.exeWbResults(6).bits.uop.roqIdx.value
+      exceptionData.io.wdata(wPortIdx) := io.exeWbResults(6).bits.uop.cf.exceptionVec(i)
+      wPortIdx = wPortIdx + 1
+    }
+    if (atomicsWbCount(i) > 0) {
+      exceptionData.io.wen  (wPortIdx) := io.exeWbResults(4).valid
+      exceptionData.io.waddr(wPortIdx) := io.exeWbResults(4).bits.uop.roqIdx.value
+      exceptionData.io.wdata(wPortIdx) := io.exeWbResults(4).bits.uop.cf.exceptionVec(i)
+      wPortIdx = wPortIdx + 1
+    }
+    if (loadWbCount(i) > 0) {
+      exceptionData.io.wen  (wPortIdx) := io.exeWbResults(5).valid
+      exceptionData.io.waddr(wPortIdx) := io.exeWbResults(5).bits.uop.roqIdx.value
+      exceptionData.io.wdata(wPortIdx) := io.exeWbResults(5).bits.uop.cf.exceptionVec(i)
+      wPortIdx = wPortIdx + 1
+    }
+    if (storeWbCount(i) > 0) {
+      exceptionData.io.wen  (wPortIdx) := io.exeWbResults(16).valid
+      exceptionData.io.waddr(wPortIdx) := io.exeWbResults(16).bits.uop.roqIdx.value
+      exceptionData.io.wdata(wPortIdx) := io.exeWbResults(16).bits.uop.cf.exceptionVec(i)
+      wPortIdx = wPortIdx + 1
+      exceptionData.io.wen  (wPortIdx) := io.exeWbResults(17).valid
+      exceptionData.io.waddr(wPortIdx) := io.exeWbResults(17).bits.uop.roqIdx.value
+      exceptionData.io.wdata(wPortIdx) := io.exeWbResults(17).bits.uop.cf.exceptionVec(i)
+      wPortIdx = wPortIdx + 1
+    }
+
+    exceptionData.io.raddr := VecInit(deqPtrVec_next.map(_.value))
+    exceptionDataRead.zip(exceptionData.io.rdata).map{ case (d, r) => d(i) := r }
   }
 
   /**
@@ -663,11 +693,27 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     if(i % 4 == 3) XSDebug(false, true.B, "\n")
   }
 
-  val id = roqDebugId()
-  val difftestIntrNO = WireInit(0.U(XLEN.W))
-  val difftestCause = WireInit(0.U(XLEN.W))
-  ExcitingUtils.addSink(difftestIntrNO, s"difftestIntrNOfromCSR$id")
-  ExcitingUtils.addSink(difftestCause, s"difftestCausefromCSR$id")
+  XSPerf("utilization", PopCount((0 until RoqSize).map(valid(_))))
+  XSPerf("commitInstr", Mux(io.commits.isWalk, 0.U, PopCount(io.commits.valid)))
+  XSPerf("commitInstrLoad", Mux(io.commits.isWalk, 0.U, PopCount(io.commits.valid.zip(io.commits.info.map(_.commitType)).map{ case (v, t) => v && t === CommitType.LOAD})))
+  XSPerf("commitInstrStore", Mux(io.commits.isWalk, 0.U, PopCount(io.commits.valid.zip(io.commits.info.map(_.commitType)).map{ case (v, t) => v && t === CommitType.STORE})))
+  XSPerf("writeback", PopCount((0 until RoqSize).map(i => valid(i) && writebacked(i))))
+  // XSPerf("enqInstr", PopCount(io.dp1Req.map(_.fire())))
+  // XSPerf("d2rVnR", PopCount(io.dp1Req.map(p => p.valid && !p.ready)))
+  XSPerf("walkInstr", Mux(io.commits.isWalk, PopCount(io.commits.valid), 0.U))
+  XSPerf("walkCycle", state === s_walk || state === s_extrawalk)
+  val deqNotWritebacked = valid(deqPtr.value) && !writebacked(deqPtr.value)
+  val deqUopCommitType = io.commits.info(0).commitType
+  XSPerf("waitNormalCycle", deqNotWritebacked && deqUopCommitType === CommitType.NORMAL)
+  XSPerf("waitBranchCycle", deqNotWritebacked && deqUopCommitType === CommitType.BRANCH)
+  XSPerf("waitLoadCycle", deqNotWritebacked && deqUopCommitType === CommitType.LOAD)
+  XSPerf("waitStoreCycle", deqNotWritebacked && deqUopCommitType === CommitType.STORE)
+  XSPerf("roqHeadPC", io.commits.info(0).pc)
+
+  val instrCnt = RegInit(0.U(64.W))
+  val retireCounter = Mux(state === s_idle, commitCnt, 0.U)
+  instrCnt := instrCnt + retireCounter
+  io.csr.perfinfo.retiredInstr := RegNext(retireCounter)
 
   if(!env.FPGAPlatform) {
 
@@ -688,10 +734,11 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
       val uop = debug_microOp(idx)
       val DifftestSkipSC = false
       if(!DifftestSkipSC){
-        skip(i) := debug_exuDebug(idx).isMMIO && io.commits.valid(i)
+        skip(i) := (debug_exuDebug(idx).isMMIO || debug_exuDebug(idx).isPerfCnt) && io.commits.valid(i)
       }else{
         skip(i) := (
             debug_exuDebug(idx).isMMIO ||
+            debug_exuDebug(idx).isPerfCnt ||
             uop.ctrl.fuType === FuType.mou && uop.ctrl.fuOpType === LSUOpType.sc_d ||
             uop.ctrl.fuType === FuType.mou && uop.ctrl.fuOpType === LSUOpType.sc_w
           ) && io.commits.valid(i)
@@ -709,10 +756,10 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
       debug_deqUop.ctrl.fuType === FuType.mou &&
       (debug_deqUop.ctrl.fuOpType === LSUOpType.sc_d || debug_deqUop.ctrl.fuOpType === LSUOpType.sc_w)
 
-    val instrCnt = RegInit(0.U(64.W))
-    val retireCounter = Mux(state === s_idle, commitCnt, 0.U)
-    instrCnt := instrCnt + retireCounter
-
+    val difftestIntrNO = WireInit(0.U(XLEN.W))
+    val difftestCause = WireInit(0.U(XLEN.W))
+    ExcitingUtils.addSink(difftestIntrNO, "difftestIntrNOfromCSR")
+    ExcitingUtils.addSink(difftestCause, "difftestCausefromCSR")
     XSDebug(difftestIntrNO =/= 0.U, "difftest intrNO set %x\n", difftestIntrNO)
     val retireCounterFix = Mux(io.redirectOut.valid, 1.U, retireCounter)
     val retirePCFix = SignExt(Mux(io.redirectOut.valid, debug_deqUop.cf.pc, debug_microOp(firstValidCommit).cf.pc), XLEN)
@@ -740,7 +787,6 @@ class Roq(numWbPorts: Int) extends XSModule with HasCircularQueuePtrHelper {
     ExcitingUtils.addSource(RegNext(trapPC), "trapPC")
     ExcitingUtils.addSource(RegNext(GTimer()), "trapCycleCnt")
     ExcitingUtils.addSource(RegNext(instrCnt), "trapInstrCnt")
-    ExcitingUtils.addSource(state === s_walk || state === s_extrawalk, "perfCntCondRoqWalk", Perf)
 
     if(EnableBPU){
       ExcitingUtils.addSource(hitTrap, "XSTRAP", ConnectionType.Debug)
