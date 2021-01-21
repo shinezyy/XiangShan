@@ -412,7 +412,7 @@ class LoopPredictor extends BasePredictor with LTBParams {
   // if4
   val if3_fire = io.if3_fire
   // val inMask = io.inMask // This is if4_mask
-  val inMask = io.inMask & (((UIntToOH(io.respIn.jmpIdx)(PredictWidth-1, 0) - 1.U(1.W))<<1)|1.U(1.W))
+  val inMask = io.inMask & (((UIntToOH(io.respIn.jmpIdx)(PredictWidth-1, 0) - 1.U(1.W))<<1)(PredictWidth-1, 0)|1.U(1.W))
 
   for (i <- 0 until PredictWidth) {
     ltbs(i).io.req.pc := packetAlignedPC
