@@ -59,7 +59,7 @@ object ExcitingUtils {
     forceExists: Boolean = false
   ): Unit = {
     val conn = map.getOrElseUpdate(name, new Connection(connType))
-    require(conn.sinkModule.isEmpty)
+    // require(conn.sinkModule.isEmpty)
     require(conn.connType == connType)
     conn.sinkModule = Some(component.parentModName)
     BoringUtils.addSink(component, name, disableDedup, forceExists)

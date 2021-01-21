@@ -229,7 +229,7 @@ class MicroBTB extends BasePredictor
   
   
     val jalFirstEncountered = !u.isMisPred && !u.bpuMeta.btbHitJal && (u.pd.brType === BrType.jal)
-    val entry_write_valid = io.update.valid && (u.isMisPred || jalFirstEncountered) && !u.isReplay //io.update.valid //&& update_is_BR_or_JAL
+    val entry_write_valid = io.update.valid && update_taken && (u.isMisPred || jalFirstEncountered) && !u.isReplay //io.update.valid //&& update_is_BR_or_JAL
     val meta_write_valid = io.update.valid && (u.isMisPred || jalFirstEncountered) && !u.isReplay//io.update.valid //&& update_is_BR_or_JAL
 
     for (b <- 0 until PredictWidth) {
