@@ -156,6 +156,7 @@ class ICacheMetaArray extends ICachArray
     val write = Flipped(DecoupledIO(new ICacheMetaWriteBundle))
     val read  = Flipped(DecoupledIO(UInt(idxBits.W)))
     val readResp = Output(Vec(nWays,UInt(tagBits.W)))
+    val checkWrong = Output(Bool())
   }}
 
   val metaArray = Module(new SRAMTemplate(
@@ -172,13 +173,13 @@ class ICacheMetaArray extends ICachArray
   val readNextReg = RegNext(io.read.fire())
   val rtags = metaArray.io.r.resp.asTypeOf(Vec(nWays,UInt(encMetaBits.W)))
   val rtags_decoded = rtags.map{ wtag =>cacheParams.dataCode.decode(wtag)}
-  val rtags_wrong = rtags_decoded.map{ wtag_decoded => wtag_decoded.uncorrectable}
-  //assert(readNextReg && !ParallelOR(rtags_wrong))
+  val rtags_wrong = VecInit(rtags_decoded.map{ wtag_decoded => wtag_decoded.uncorrectable})
   val rtags_corrected = VecInit(rtags_decoded.map{ wtag_decoded => wtag_decoded.corrected})
   metaArray.io.r.req.valid := io.read.valid
   metaArray.io.r.req.bits.apply(setIdx=io.read.bits)
   io.read.ready := !io.write.valid
   io.readResp := rtags_corrected.asTypeOf(Vec(nWays,UInt(tagBits.W)))
+  io.checkWrong := readNextReg && rtags_wrong.asUInt.orR
 
   //write
   val write = io.write.bits
@@ -196,6 +197,7 @@ class ICacheDataArray extends ICachArray
     val write = Flipped(DecoupledIO(new ICacheDataWriteBundle))
     val read  = Flipped(DecoupledIO(UInt(idxBits.W)))
     val readResp = Output(Vec(nWays,Vec(blockRows,UInt(rowBits.W))))
+    val checkWrong = Output(Bool())
   }}
 
   //dataEntryBits = 144
@@ -222,25 +224,33 @@ class ICacheDataArray extends ICachArray
     }
   }
   val rdatas_decoded = rdatas.map{wdata => wdata.map{ bdata => bdata.map{ unit => cacheParams.dataCode.decode(unit)}}}
-  val rdata_corrected = VecInit((0 until nWays).map{ w =>
+  val rdatas_corrected = VecInit((0 until nWays).map{ w =>
       VecInit((0 until nBanks).map{ b =>
           VecInit((0 until bankUnitNum).map{ i =>
             rdatas_decoded(w)(b)(i).corrected
           })
       })
     })
+  val rdatas_wrong = VecInit((0 until nWays).map{ w =>
+    VecInit((0 until nBanks).map{ b =>
+        VecInit((0 until bankUnitNum).map{ i =>
+         rdatas_decoded(w)(b)(i).uncorrectable
+        })
+    })
+  })
 
   (0 until nWays).map{ w =>
       (0 until blockRows).map{ r =>
         io.readResp(w)(r) := Cat(
         (0 until bankUnitNum/2).map{ i =>
           //println("result: ",r,i)
-          rdata_corrected(w)(r >> 1)((r%2) * 8 + i).asUInt
+          rdatas_corrected(w)(r >> 1)((r%2) * 8 + i).asUInt
         }.reverse )
       }
   }
 
   io.read.ready := !io.write.valid
+  io.checkWrong := readNextReg && rdatas_wrong.asUInt.orR
 
   //write
   val write = io.write.bits
@@ -351,7 +361,7 @@ class ICache extends ICacheModule
   val icacheExceptionVec = Wire(Vec(8,Bool()))
   val hasIcacheException = icacheExceptionVec.asUInt().orR()
   icacheExceptionVec := DontCare
-  icacheExceptionVec(accessFault) := s2_tlb_resp.excp.af.instr && s2_allValid
+  icacheExceptionVec(accessFault) := (s2_tlb_resp.excp.af.instr && s2_allValid) || metaArray.io.checkWrong || dataArray.io.checkWrong
   icacheExceptionVec(pageFault) := s2_tlb_resp.excp.pf.instr && s2_allValid
 
   s2_mmio := s2_valid && io.tlb.resp.valid && s2_tlb_resp.mmio && !hasIcacheException
