@@ -47,6 +47,7 @@ class FrontendImp (outer: Frontend) extends LazyModuleImp(outer)
   ifu.io.commitUpdate <> io.backend.commit_cfiUpdate
   ifu.io.ftqEnqPtr <> io.backend.ftqEnqPtr
   ifu.io.ftqLeftOne <> io.backend.ftqLeftOne
+  ifu.io.waitTableUpdate <> io.backend.waitTableUpdate
   // to icache
   val grantClientId = clientId(io.icacheMemGrant.bits.id)
   val grantEntryId = entryId(io.icacheMemGrant.bits.id)

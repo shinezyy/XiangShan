@@ -156,6 +156,9 @@ class RedirectGenerator extends XSModule with HasCircularQueuePtrHelper {
   io.waitTableUpdate.valid := isReplay && s2_redirect_valid_reg
   io.waitTableUpdate.waddr := real_pc(VAddrBits-1, 1)
   io.waitTableUpdate.wdata := true.B
+  when (isReplay && s2_redirect_valid_reg) {
+    XSDebug("%d: rollback: pc %x\n", GTimer(), real_pc)
+  }
 
   io.stage3Redirect.valid := s2_redirect_valid_reg
   io.stage3Redirect.bits := s2_redirect_bits_reg
@@ -278,10 +281,9 @@ class CtrlBlock extends XSModule with HasCircularQueuePtrHelper {
 
   decode.io.in <> io.frontend.cfVec
   // currently, we only update wait table when isReplay
-  decode.io.waitTableUpdate(0) <> RegNext(redirectGen.io.waitTableUpdate)
-  decode.io.waitTableUpdate(1) := DontCare
-  decode.io.waitTableUpdate(1).valid := false.B
-  // decode.io.waitTableUpdate <> io.toLsBlock.waitTableUpdate
+  io.frontend.waitTableUpdate(0) <> RegNext(redirectGen.io.waitTableUpdate)
+  io.frontend.waitTableUpdate(1) := DontCare
+  io.frontend.waitTableUpdate(1).valid := false.B
 
   val jumpInst = dispatch.io.enqIQCtrl(0).bits
   val ftqOffsetReg = Reg(UInt(log2Up(PredictWidth).W))

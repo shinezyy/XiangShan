@@ -10,6 +10,7 @@ import chisel3.experimental.chiselName
 import freechips.rocketchip.tile.HasLazyRoCC
 import chisel3.ExcitingUtils._
 import xiangshan.backend.ftq.FtqPtr
+import xiangshan.backend.decode.WaitTable
 
 trait HasInstrMMIOConst extends HasXSParameter with HasIFUConst{
   def mmioBusWidth = 64
@@ -86,6 +87,8 @@ class IFUIO extends XSBundle
   val mmio_acquire = DecoupledIO(new InsUncacheReq)
   val mmio_grant  = Flipped(DecoupledIO(new InsUncacheResp))
   val mmio_flush = Output(Bool())
+  // from memblock
+  val waitTableUpdate = Vec(StorePipelineWidth, Input(new WaitTableUpdateReq))
 }
 
 class PrevHalfInstr extends XSBundle {
@@ -514,6 +517,17 @@ class IFU extends XSModule with HasIFUConst with HasCircularQueuePtrHelper
   fetchPacketWire.instrs := expandedInstrs
 
   fetchPacketWire.pc := if4_pd.pc
+
+  // read waittable, update loadWaitBit
+  val waittable = Module(new WaitTable(rwidth = PredictWidth))
+  for (i <- 0 until PredictWidth) {
+    waittable.io.raddr(i) := if4_pd.pc(i)(VAddrBits-1, 1)
+    fetchPacketWire.loadWaitBit(i) := waittable.io.rdata(i)
+  }
+
+  for (i <- 0 until StorePipelineWidth) {
+    waittable.io.update(i) <> RegNext(io.waitTableUpdate(i))
+  }
 
   fetchPacketWire.pdmask := if4_pd.mask
   fetchPacketWire.pd := if4_pd.pd

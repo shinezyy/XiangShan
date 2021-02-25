@@ -13,10 +13,10 @@ trait WaitTableParameters {
 }
 
 // 21264-like wait table
-class WaitTable extends XSModule with WaitTableParameters {
+class WaitTable(rwidth: Int) extends XSModule with WaitTableParameters {
   val io = IO(new Bundle {
-    val raddr = Vec(DecodeWidth, Input(UInt(WaitTableAddrWidth.W))) // decode pc(VaddrBits-1, 1)
-    val rdata = Vec(DecodeWidth, Output(Bool())) // loadWaitBit
+    val raddr = Vec(rwidth, Input(UInt(WaitTableAddrWidth.W))) // decode pc(VaddrBits-1, 1)
+    val rdata = Vec(rwidth, Output(Bool())) // loadWaitBit
     val update = Vec(StorePipelineWidth, Input(new WaitTableUpdateReq)) // RegNext should be added outside
   })
 
@@ -26,7 +26,7 @@ class WaitTable extends XSModule with WaitTableParameters {
 
   // read ports
   val raddr = if (isSync) (RegNext(io.raddr)) else io.raddr
-  for (i <- 0 until DecodeWidth) {
+  for (i <- 0 until rwidth) {
     io.rdata(i) := data(raddr(i))
   }
 

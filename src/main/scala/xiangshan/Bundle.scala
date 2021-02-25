@@ -27,6 +27,7 @@ class FetchPacket extends XSBundle {
   // val pc = UInt(VAddrBits.W)
   val pc = Vec(PredictWidth, UInt(VAddrBits.W))
   val pd = Vec(PredictWidth, new PreDecodeInfo)
+  val loadWaitBit = Vec(PredictWidth, Bool())
   val ipf = Bool()
   val acf = Bool()
   val crossPageIPFFix = Bool()
@@ -408,6 +409,7 @@ class FrontendToBackendIO extends XSBundle {
   val commit_cfiUpdate = Flipped(ValidIO(new FtqEntry))
   val ftqEnqPtr = Input(new FtqPtr)
   val ftqLeftOne = Input(Bool())
+  val waitTableUpdate = Vec(StorePipelineWidth, Input(new WaitTableUpdateReq))
 }
 
 class TlbCsrBundle extends XSBundle {
