@@ -74,4 +74,6 @@ class MaskedLoadForwardQueryIO extends XSBundle {
   val sqIdx = Output(new SqPtr) // for debug
   // sqIdxMask is calcuated in earlier stage for better timing
   val sqIdxMask = Output(UInt(StoreQueueSize.W))
+
+  val lqIdx = Output(new LqPtr) // for lal violation check
 }

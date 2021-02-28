@@ -27,8 +27,8 @@ class LQPaddrModule(numEntries: Int, numRead: Int, numWrite: Int) extends XSModu
     val wen   = Input(Vec(numWrite, Bool()))
     val waddr = Input(Vec(numWrite, UInt(log2Up(numEntries).W)))
     val wdata = Input(Vec(numWrite, UInt((PAddrBits).W)))
-    val violationMdata = Input(Vec(2, UInt((PAddrBits).W)))
-    val violationMmask = Output(Vec(2, Vec(numEntries, Bool())))
+    val violationMdata = Input(Vec(StorePipelineWidth + LoadPipelineWidth, UInt((PAddrBits).W)))
+    val violationMmask = Output(Vec(StorePipelineWidth + LoadPipelineWidth, Vec(numEntries, Bool())))
     val refillMdata = Input(UInt((PAddrBits).W))
     val refillMmask = Output(Vec(numEntries, Bool()))
   })
@@ -48,7 +48,7 @@ class LQPaddrModule(numEntries: Int, numRead: Int, numWrite: Int) extends XSModu
   }
   
   // content addressed match
-  for (i <- 0 until 2) {
+  for (i <- 0 until StorePipelineWidth + LoadPipelineWidth) {
     for (j <- 0 until numEntries) {
       io.violationMmask(i)(j) := io.violationMdata(i)(PAddrBits-1, 3) === data(j)(PAddrBits-1, 3)
     }
@@ -73,8 +73,8 @@ class MaskModule(numEntries: Int, numRead: Int, numWrite: Int) extends XSModule 
     val wen   = Input(Vec(numWrite, Bool()))
     val waddr = Input(Vec(numWrite, UInt(log2Up(numEntries).W)))
     val wdata = Input(Vec(numWrite, UInt(8.W)))
-    val violationMdata = Input(Vec(2, UInt((PAddrBits).W)))
-    val violationMmask = Output(Vec(2, Vec(numEntries, Bool())))
+    val violationMdata = Input(Vec(StorePipelineWidth + LoadPipelineWidth, UInt((PAddrBits).W)))
+    val violationMmask = Output(Vec(StorePipelineWidth + LoadPipelineWidth, Vec(numEntries, Bool())))
   })
 
   val data = Reg(Vec(numEntries, UInt(8.W)))
@@ -92,7 +92,7 @@ class MaskModule(numEntries: Int, numRead: Int, numWrite: Int) extends XSModule 
   }
   
   // content addressed match
-  for (i <- 0 until 2) {
+  for (i <- 0 until StorePipelineWidth + LoadPipelineWidth) {
     for (j <- 0 until numEntries) {
       io.violationMmask(i)(j) := (io.violationMdata(i) & data(j)).orR
     }
@@ -260,7 +260,7 @@ class LoadQueueData(size: Int, wbNumRead: Int, wbNumWrite: Int) extends XSModule
       val refillMask = Input(Vec(size, Bool()))
       val matchMask = Output(Vec(size, Bool()))
     }
-    val violation = Vec(StorePipelineWidth, new Bundle() {
+    val violation = Vec(StorePipelineWidth + LoadPipelineWidth, new Bundle() {
       val paddr = Input(UInt(PAddrBits.W))
       val mask = Input(UInt(8.W))
       val violationMask = Output(Vec(size, Bool()))
@@ -355,7 +355,7 @@ class LoadQueueData(size: Int, wbNumRead: Int, wbNumWrite: Int) extends XSModule
   coredataModule.io.wdata(wbNumWrite) := io.uncache.wdata
 
   // mem access violation check, gen violationMask
-  (0 until StorePipelineWidth).map(i => {
+  (0 until StorePipelineWidth + LoadPipelineWidth).map(i => {
     paddrModule.io.violationMdata(i) := io.violation(i).paddr
     maskModule.io.violationMdata(i) := io.violation(i).mask
     io.violation(i).violationMask := (paddrModule.io.violationMmask(i).asUInt & maskModule.io.violationMmask(i).asUInt).asBools

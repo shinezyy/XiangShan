@@ -11,7 +11,7 @@ import xiangshan.backend.LSUOpType
 import xiangshan.mem._
 import xiangshan.backend.roq.RoqLsqIO
 import xiangshan.backend.fu.HasExceptionNO
-
+import chisel3.experimental.chiselName
 
 class LqPtr extends CircularQueuePtr(LqPtr.LoadQueueSize) { }
 
@@ -56,6 +56,7 @@ class LqEnqIO extends XSBundle {
 }
 
 // Load Queue
+@chiselName
 class LoadQueue extends XSModule
   with HasDCacheParameters
   with HasCircularQueuePtrHelper
@@ -77,6 +78,7 @@ class LoadQueue extends XSModule
     val dcache = Flipped(ValidIO(new Refill))
     val uncache = new DCacheWordIO
     val exceptionAddr = new ExceptionAddrIO
+    val lalViolation = Vec(LoadPipelineWidth, Output(Bool()))
   })
 
   val uop = Reg(Vec(LoadQueueSize, new MicroOp))
@@ -356,18 +358,18 @@ class LoadQueue extends XSModule
   }
 
   /**
-    * Memory violation detection
+    * Memory violation detection: store
     *
     * When store writes back, it searches LoadQueue for younger load instructions
     * with the same load physical address. They loaded wrong data and need re-execution.
     *
-    * Cycle 0: Store Writeback
-    *   Generate match vector for store address with rangeMask(stPtr, enqPtr).
+    * Cycle 0: Store Writeback (Store Pipeline store_s1)
+    *   Generate match vector for store address with rangeMask(lqIdx, enqPtr).
     *   Besides, load instructions in LoadUnit_S1 and S2 are also checked.
-    * Cycle 1: Redirect Generation
+    * Cycle 1: Redirect Generation (Store Pipeline store_s2)
     *   There're three possible types of violations, up to 6 possible redirect requests.
     *   Choose the oldest load (part 1). (4 + 2) -> (1 + 2)
-    * Cycle 2: Redirect Fire
+    * Cycle 2: Redirect Fire (Store Pipeline store_s3)
     *   Choose the oldest load (part 2). (3 -> 1)
     *   Prepare redirect request according to the detected violation.
     *   Fire redirect request (if valid)
@@ -530,6 +532,53 @@ class LoadQueue extends XSModule
 
   when(io.rollback.valid) {
     // XSDebug("Mem rollback: pc %x roqidx %d\n", io.rollback.bits.cfi, io.rollback.bits.roqIdx.asUInt)
+  }
+
+  /**
+    * Memory violation detection: load
+    *
+    * When load paddr is ready, it searches LoadQueue for younger load instructions
+    * with the same load physical address. They may loaded wrong data and need re-execution.
+    *
+    * Cycle 0: Addr Match (Load Pipeline load_s1)
+    *   Generate match vector for load address with rangeMask(lqIdx, enqPtr).
+    * Cycle 1: Redirect Generation (Load Pipeline load_s2)
+    *   Generate violation check result based on match result
+    *
+    * Violation exception will be add to load inst, redirect will be actually triggered
+    * when it reaches the end of roq
+    */
+
+  for (i <- 0 until LoadPipelineWidth) {
+    // Memory violation detection: load starts in load_s1, returen result in load_s2
+    // If violation exists, the processor should rerun from this load
+    val startIndex = io.load_s1(i).lqIdx.value
+    val lqIdxMask = UIntToMask(startIndex, LoadQueueSize)
+    val xorMask = lqIdxMask ^ enqMask
+    val sameFlag = io.storeIn(i).bits.uop.lqIdx.flag === enqPtrExt(0).flag
+    val toEnqPtrMask = Mux(sameFlag, xorMask, ~xorMask)
+
+    // check if load already in lq needs to be rolledback
+    dataModule.io.violation(StorePipelineWidth + i).paddr := io.load_s1(i).paddr
+    dataModule.io.violation(StorePipelineWidth + i).mask := io.load_s1(i).mask
+    val addrMaskMatch = RegNext(dataModule.io.violation(StorePipelineWidth + i).violationMask)
+    val entryNeedCheck = RegNext(VecInit((0 until LoadQueueSize).map(j => {
+      allocated(j) && toEnqPtrMask(j) && (datavalid(j) || miss(j))
+    })))
+    val lqViolationVec = VecInit((0 until LoadQueueSize).map(j => {
+      addrMaskMatch(j) && entryNeedCheck(j)
+    }))
+    val lqViolation = lqViolationVec.asUInt().orR() && io.load_s1(i).valid
+    val debug_lqViolationIndex = getFirstOne(lqViolationVec, RegNext(lqIdxMask))
+
+    // check if rollback is needed for load in l2
+    val l2Violation = io.loadIn(i).valid && RegNext(io.loadIn(i).valid) &&
+      isAfter(io.loadIn(i).bits.uop.roqIdx, RegNext(io.loadIn(i).bits.uop.roqIdx)) && // load in s1 is younger than load in s2
+      io.loadIn(i).bits.paddr(PAddrBits - 1, 3) === RegNext(io.loadIn(i).bits.paddr(PAddrBits - 1, 3)) && // Paddr Match
+      (io.loadIn(i).bits.mask & RegNext(io.loadIn(i).bits.mask)).orR // Mask overlap
+
+    io.lalViolation(i) := l2Violation || lqViolation
+    XSPerf("lalViolation", PopCount(io.lalViolation), acc = true)
   }
 
   /**

@@ -2,6 +2,7 @@ package xiangshan.backend
 
 import chisel3._
 import chisel3.util._
+import utils._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import freechips.rocketchip.tile.HasFPUParameters
@@ -245,6 +246,8 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
     lsq.io.loadDataForwarded(i)   <> loadUnits(i).io.lsq.loadDataForwarded
     lsq.io.needReplayFromRS(i)    <> loadUnits(i).io.lsq.needReplayFromRS
   }
+
+  XSPerf("loadWbCnt", PopCount(loadUnits.map(i => i.io.ldout.fire())), acc = true)
 
   // StoreUnit
   for (i <- 0 until exuParameters.StuCnt) {
