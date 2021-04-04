@@ -68,7 +68,7 @@ class SbufferData extends XSModule with HasSbufferConst {
   io.dataOut := data
 }
 
-class NewSbuffer extends XSModule with HasSbufferConst {
+class Sbuffer extends XSModule with HasSbufferConst {
   val io = IO(new Bundle() {
     val in = Vec(StorePipelineWidth, Flipped(Decoupled(new DCacheWordReq)))  //Todo: store logic only support Width == 2 now
     val dcache = new DCacheLineIO

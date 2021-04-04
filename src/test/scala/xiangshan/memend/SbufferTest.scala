@@ -8,13 +8,13 @@ import chisel3.util._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 import xiangshan._
-import xiangshan.mem.{LoadForwardQueryIO, NewSbuffer}
+import xiangshan.mem.{LoadForwardQueryIO, Sbuffer}
 import xiangshan.testutils._
 
 import scala.util.Random
 
 class SbufferWapper extends XSModule {
-  val sbuffer = Module(new NewSbuffer)
+  val sbuffer = Module(new Sbuffer)
   val io = IO(sbuffer.io.cloneType)
   io <> sbuffer.io
   AddSinks()

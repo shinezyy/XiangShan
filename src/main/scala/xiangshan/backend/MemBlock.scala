@@ -231,7 +231,7 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
 
   val dtlb    = Module(new TLB(Width = DTLBWidth, isDtlb = true))
   val lsq     = Module(new LsqWrappper)
-  val sbuffer = Module(new NewSbuffer)
+  val sbuffer = Module(new Sbuffer)
   // if you wants to stress test dcache store, use FakeSbuffer
   // val sbuffer = Module(new FakeSbuffer)
 
