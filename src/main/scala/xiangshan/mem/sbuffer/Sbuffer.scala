@@ -404,4 +404,78 @@ class Sbuffer extends XSModule with HasSbufferConst {
       }
     }
   }
+
+  // ---------------------- Store-Prefetch Bursts ---------------------
+  // See "Boosting Store Buffer Efficiency with Store-Prefetch Bursts"
+  // Current design supports up to 2 stores commit in the same cycle
+
+  val spbN = 48
+
+  val spbLastBlock = Reg(UInt(PAddrBits.W))
+  val spbConsecutiveBlock = RegInit(0.U(log2Up(spbN).W))
+  val spbStoreCount = RegInit(0.U(log2Up(spbN).W))
+  // "When a store commits, SPB gets the address of the block
+  // to be written by the store (omitting the six least significant
+  // bits of the target memory address for 64-byte blocks) and
+  // computes the difference with respect to the block address
+  // of the last committed store."
+  val spbAddr0Diff0 = spbLastBlock === io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+  val spbAddr0Diff1 = (spbLastBlock + 1.U) === io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+  val spbAddr0Diffx = !spbAddr0Diff0 && !spbAddr0Diff1
+  val spbAddr1Diff0 = io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3) === io.in(1).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+  val spbAddr1Diff1 = io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3) + 1.U === io.in(1).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+  val spbAddr1Diffx = !spbAddr1Diff0 && !spbAddr1Diff1
+  when(io.in(0).fire()) {
+    // After each store computes the difference, the last block register 
+    // is updated with the current block address and the store count is increased."
+    spbStoreCount := spbStoreCount + 1.U
+    // "If the difference is 0, both stores access the same block and the saturated
+    // counter is not modified."
+    // "If the difference is 1, the stores access consecutive blocks, 
+    // and the saturated counter is increased."
+    when(spbAddr0Diff1) {
+      spbLastBlock := io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+      spbConsecutiveBlock := spbConsecutiveBlock + 1.U
+    }
+    // "In any other case, the saturated counter is reset. 
+    when(spbAddr0Diffx) {
+      spbLastBlock := io.in(0).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+      spbConsecutiveBlock := 0.U
+    }
+  }
+
+  when(io.in(1).fire()) {
+    // After each store computes the difference, the last block register 
+    // is updated with the current block address and the store count is increased."
+    spbStoreCount := spbStoreCount + 2.U
+    // "If the difference is 0, both stores access the same block and the saturated
+    // counter is not modified."
+    // "If the difference is 1, the stores access consecutive blocks, 
+    // and the saturated counter is increased."
+    when(spbAddr1Diff1) {
+      spbLastBlock := io.in(1).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+      spbConsecutiveBlock := spbConsecutiveBlock + Mux(spbAddr0Diff1, 2.U, 1.U)
+    }
+    // "In any other case, the saturated counter is reset. 
+    when(spbAddr1Diffx) {
+      spbLastBlock := io.in(1).bits.addr(PAddrBits-1, log2Up(CacheLineSize)-3)
+      spbConsecutiveBlock := 0.U
+    }
+  }
+
+  val spBprefetchReq = WireInit(false.B)
+  when(spbStoreCount === spbN.U) {
+    spbStoreCount := 0.U
+    spbConsecutiveBlock := 0.U
+    spBprefetchReq := spbConsecutiveBlock >= (spbN/8).U
+  }
+
+  XSPerfAccumulate("spb_prefetch_req", spBprefetchReq)
+  XSPerfAccumulate("sbuffer_commit_total", io.in(0).fire().asUInt + io.in(1).fire().asUInt)
+
+  XSPerfAccumulate("sbuffer_odd_full", !oddCanInsert)
+  XSPerfAccumulate("sbuffer_even_full", !evenCanInsert)
+  XSPerfAccumulate("sbuffer_full", !io.in(0).ready)
+  XSPerfAccumulate("sbuffer_real_full", !oddCanInsert && !evenCanInsert)
+  XSPerfAccumulate("sbuffer_fail_in", !io.in(0).ready && io.in(0).valid)
 }
