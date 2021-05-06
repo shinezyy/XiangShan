@@ -3,7 +3,7 @@ name: EMU Test
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, test-l2xbar-policy]
   pull_request:
     branches: [ master ]
 

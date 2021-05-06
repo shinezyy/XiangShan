@@ -23,7 +23,7 @@ class XSCoreWithL2()(implicit p: Parameters) extends LazyModule
   with HasXSParameter with HasSoCParameter {
   private val core = LazyModule(new XSCore())
   private val l2prefetcher = LazyModule(new L2Prefetcher())
-  private val l2xbar = TLXbar()
+  private val l2xbar = TLXbar(policy = TLArbiter.lowestIndexFirst)
   private val l2cache = if (useFakeL2Cache) null else LazyModule(new InclusiveCache(
     CacheParameters(
       level = 2,
