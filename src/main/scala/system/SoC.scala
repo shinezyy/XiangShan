@@ -12,7 +12,8 @@ case class SoCParameters
 (
   cores: List[XSCoreParameters],
   EnableILA: Boolean = false,
-  extIntrs: Int = 150
+  extIntrs: Int = 150,
+  useFakeL3Cache: Boolean = false
 ){
   val PAddrBits = cores.map(_.PAddrBits).reduce((x, y) => if(x > y) x else y)
   // L3 configurations
@@ -36,6 +37,7 @@ trait HasSoCParameter {
   val EnableILA = soc.EnableILA
 
   // L3 configurations
+  val useFakeL3Cache = soc.useFakeL3Cache
   val L3InnerBusWidth = soc.L3InnerBusWidth
   val L3Size = soc.L3Size
   val L3BlockSize = soc.L3BlockSize

@@ -14,7 +14,6 @@ case object XSCoreParamsKey extends Field[XSCoreParameters]
 
 case class XSCoreParameters
 (
-  HasL2Cache: Boolean = false,
   HasPrefetch: Boolean = false,
   HartId: Int = 0,
   XLEN: Int = 64,
@@ -23,7 +22,6 @@ case class XSCoreParameters
   HasDiv: Boolean = true,
   HasICache: Boolean = true,
   HasDCache: Boolean = true,
-  EnableStoreQueue: Boolean = true,
   AddrBits: Int = 64,
   VAddrBits: Int = 39,
   PAddrBits: Int = 40,
@@ -94,6 +92,9 @@ case class XSCoreParameters
   PtwL1EntrySize: Int = 16,
   PtwL2EntrySize: Int = 2048, //(256 * 8)
   NumPerfCounters: Int = 16,
+  useFakePTW: Boolean = false,
+  useFakeDCache: Boolean = false,
+  useFakeL1plusCache: Boolean = false
 ){
   val loadExuConfigs = Seq.fill(exuParameters.LduCnt)(LdExeUnitCfg)
   val storeExuConfigs = Seq.fill(exuParameters.StuCnt)(StExeUnitCfg)
@@ -138,7 +139,6 @@ trait HasXSParameter {
   val HasDiv = coreParams.HasDiv
   val HasIcache = coreParams.HasICache
   val HasDcache = coreParams.HasDCache
-  val EnableStoreQueue = coreParams.EnableStoreQueue
   val AddrBits = coreParams.AddrBits // AddrBits is used in some cases
   val VAddrBits = coreParams.VAddrBits // VAddrBits is Virtual Memory addr bits
   val PAddrBits = coreParams.PAddrBits // PAddrBits is Phyical Memory addr bits
@@ -236,7 +236,11 @@ trait HasXSParameter {
   // cache hierarchy configurations
   val l1BusDataWidth = 256
 
+  val useFakeDCache = coreParams.useFakeDCache
+  val useFakePTW = coreParams.useFakePTW
+  val useFakeL1plusCache = coreParams.useFakeL1plusCache
   // L2 configurations
+  val useFakeL2Cache = useFakeDCache && useFakePTW && useFakeL1plusCache
   val L1BusWidth = 256
   val L2Size = 512 * 1024 // 512KB
   val L2BlockSize = 64
@@ -245,7 +249,7 @@ trait HasXSParameter {
 
   // L3 configurations
   val L2BusWidth = 256
-  
+
   // icache prefetcher
   val l1plusPrefetcherParameters = L1plusPrefetcherParameters(
     enable = true,
@@ -297,12 +301,13 @@ trait HasXSParameter {
   val LFSTWidth = 4
   val StoreSetEnable = true // LWT will be disabled if SS is enabled
 
-  val loadExuConfigs = coreParams.loadExuConfigs 
-  val storeExuConfigs = coreParams.storeExuConfigs 
+  val loadExuConfigs = coreParams.loadExuConfigs
+  val storeExuConfigs = coreParams.storeExuConfigs
 
-  val intExuConfigs = coreParams.intExuConfigs 
+  val intExuConfigs = coreParams.intExuConfigs
 
-  val fpExuConfigs = coreParams.fpExuConfigs 
+  val fpExuConfigs = coreParams.fpExuConfigs
 
-  val exuConfigs = coreParams.exuConfigs 
+  val exuConfigs = coreParams.exuConfigs
+
 }
