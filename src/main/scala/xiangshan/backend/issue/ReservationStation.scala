@@ -616,7 +616,7 @@ class ReservationStationCtrl
   } else {
     io.readyVec := srcQueueWire.map(Cat(_).andR)
   }
-  if (exuCfg == LdExeUnitCfg || exuCfg == StExeUnitCfg) {
+  if (exuCfg == LdExeUnitCfg) {
     val ldWait = Reg(Vec(iqSize, Bool()))
     val sqIdx  = Reg(Vec(iqSize, new SqPtr()))
     ldWait.zip(sqIdx).map{ case (lw, sq) =>
@@ -627,10 +627,21 @@ class ReservationStationCtrl
     when (enqEn) {
       ldWait(enqPtr) := !enqUop.cf.loadWaitBit
       sqIdx(enqPtr)  := enqUop.sqIdx
+      if(exuCfg == StExeUnitCfg){
+        assert(!enqUop.cf.loadWaitBit)
+      }
     }
     ldWait.suggestName(s"${this.name}_ldWait")
     sqIdx.suggestName(s"${this.name}_sqIdx")
     io.readyVec := srcQueueWire.map(Cat(_).andR).zip(ldWait).map{ case (s, l) => s&l }
+  }
+
+  if (exuCfg == StExeUnitCfg) {
+    when (enqEn) {
+      if(exuCfg == StExeUnitCfg){
+        assert(!enqUop.cf.loadWaitBit)
+      }
+    }
   }
 
   val redirectHit = io.redirectVec(selPtr)
