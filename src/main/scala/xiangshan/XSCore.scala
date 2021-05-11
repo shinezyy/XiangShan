@@ -42,44 +42,44 @@ case class XSCoreParameters
   HasFPU: Boolean = true,
   FetchWidth: Int = 8,
   EnableBPU: Boolean = true,
-  EnableBPD: Boolean = true,
-  EnableRAS: Boolean = true,
+  EnableBPD: Boolean = false,
+  EnableRAS: Boolean = false,
   EnableLB: Boolean = false,
-  EnableLoop: Boolean = true,
-  EnableSC: Boolean = true,
+  EnableLoop: Boolean = false,
+  EnableSC: Boolean = false,
   EnbaleTlbDebug: Boolean = false,
   EnableJal: Boolean = false,
-  EnableUBTB: Boolean = true,
-  HistoryLength: Int = 64,
-  BtbSize: Int = 2048,
-  JbtacSize: Int = 1024,
+  EnableUBTB: Boolean = false,
+  HistoryLength: Int = 32,
+  BtbSize: Int = 64,
+  JbtacSize: Int = 64,
   JbtacBanks: Int = 8,
-  RasSize: Int = 16,
+  RasSize: Int = 4,
   CacheLineSize: Int = 512,
   UBtbWays: Int = 16,
   BtbWays: Int = 2,
 
   EnableL1plusPrefetcher: Boolean = true,
-  IBufSize: Int = 48,
-  DecodeWidth: Int = 6,
-  RenameWidth: Int = 6,
+  IBufSize: Int = 24,
+  DecodeWidth: Int = 2,
+  RenameWidth: Int = 2,
   CommitWidth: Int = 6,
   BrqSize: Int = 32,
-  FtqSize: Int = 64,
+  FtqSize: Int = 8,
   EnableLoadFastWakeUp: Boolean = true, // NOTE: not supported now, make it false
-  IssQueSize: Int = 16,
-  NRPhyRegs: Int = 160,
+  IssQueSize: Int = 4,
+  NRPhyRegs: Int = 64,
   NRIntReadPorts: Int = 14,
   NRIntWritePorts: Int = 8,
   NRFpReadPorts: Int = 14,
   NRFpWritePorts: Int = 8,
-  LoadQueueSize: Int = 64,
-  StoreQueueSize: Int = 48,
-  RoqSize: Int = 192,
+  LoadQueueSize: Int = 8,
+  StoreQueueSize: Int = 8,
+  RoqSize: Int = 32,
   dpParams: DispatchParameters = DispatchParameters(
-    IntDqSize = 16,
-    FpDqSize = 16,
-    LsDqSize = 16,
+    IntDqSize = 8,
+    FpDqSize = 8,
+    LsDqSize = 8,
     IntDqDeqWidth = 4,
     FpDqDeqWidth = 4,
     LsDqDeqWidth = 4
@@ -99,12 +99,12 @@ case class XSCoreParameters
   StorePipelineWidth: Int = 2,
   StoreBufferSize: Int = 16,
   RefillSize: Int = 512,
-  TlbEntrySize: Int = 32,
-  TlbSPEntrySize: Int = 4,
-  PtwL3EntrySize: Int = 4096, //(256 * 16) or 512
-  PtwSPEntrySize: Int = 16,
-  PtwL1EntrySize: Int = 16,
-  PtwL2EntrySize: Int = 2048, //(256 * 8)
+  TlbEntrySize: Int = 4,
+  TlbSPEntrySize: Int = 2,
+  PtwL3EntrySize: Int = 128, //(256 * 16) or 512
+  PtwSPEntrySize: Int = 2,
+  PtwL1EntrySize: Int = 2,
+  PtwL2EntrySize: Int = 128, //(256 * 8)
   NumPerfCounters: Int = 16,
   NrExtIntr: Int = 150
 )
@@ -199,6 +199,7 @@ trait HasXSParameter {
     tagECC = Some("parity"),
     dataECC = Some("parity"),
     replacer = Some("setplru"),
+    nSets = 4,
     nMissEntries = 2
   )
 
@@ -206,17 +207,19 @@ trait HasXSParameter {
     tagECC = Some("secded"),
     dataECC = Some("secded"),
     replacer = Some("setplru"),
-    nMissEntries = 8
+    nSets = 4,
+    nMissEntries = 2
   )
 
   val dcacheParameters = DCacheParameters(
     tagECC = Some("secded"),
     dataECC = Some("secded"),
     replacer = Some("setplru"),
-    nMissEntries = 16,
-    nProbeEntries = 16,
-    nReleaseEntries = 16,
-    nStoreReplayEntries = 16
+    nSets = 4,
+    nMissEntries = 2,
+    nProbeEntries = 2,
+    nReleaseEntries = 2,
+    nStoreReplayEntries = 2
   )
 
   val LRSCCycles = 100
@@ -227,14 +230,14 @@ trait HasXSParameter {
 
   // L2 configurations
   val L1BusWidth = 256
-  val L2Size = 512 * 1024 // 512KB
+  val L2Size = 1 * 1024 // 1KB
   val L2BlockSize = 64
   val L2NWays = 8
   val L2NSets = L2Size / L2BlockSize / L2NWays
 
   // L3 configurations
   val L2BusWidth = 256
-  val L3Size = 1 * 1024 * 1024 // 1MB
+  val L3Size = 1 * 1024 // 1KB
   val L3BlockSize = 64
   val L3NBanks = 1
   val L3NWays = 8
