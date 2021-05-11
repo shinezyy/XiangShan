@@ -26,7 +26,7 @@ case class XSCoreParameters
   VAddrBits: Int = 39,
   PAddrBits: Int = 40,
   HasFPU: Boolean = true,
-  FetchWidth: Int = 8,
+  FetchWidth: Int = 4,
   EnableBPU: Boolean = true,
   EnableBPD: Boolean = true,
   EnableRAS: Boolean = true,
