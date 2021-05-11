@@ -3,7 +3,7 @@ name: EMU Test
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, perf-minixs, perf-4wxs ]
   pull_request:
     branches: [ master ]
 

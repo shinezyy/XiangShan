@@ -85,6 +85,17 @@ class MinimalConfig(n: Int = 1) extends Config(
   })
 )
 
+class Width4Config(n: Int = 1) extends Config(
+  new DefaultConfig(n).alter((site, here, up) => {
+    case SoCParamsKey => up(SoCParamsKey).copy(
+      cores = up(SoCParamsKey).cores.map(_.copy(
+        DecodeWidth = 4,
+        RenameWidth = 4,
+      )),
+    )
+  })
+)
+
 // Non-synthesizable MinimalConfig, for fast simulation only
 class MinimalSimConfig(n: Int = 1) extends Config(
   new MinimalConfig(n).alter((site, here, up) => {

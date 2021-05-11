@@ -74,6 +74,7 @@ object ArgParser {
         case DebugOptionsKey => up(DebugOptionsKey).copy(FPGAPlatform = false)
       })
     }
+    config = new MinimalConfig()
     (config, firrtlOpts)
   }
 }
