@@ -61,7 +61,8 @@ class XSArgs(object):
         makefile_args = [
             (self.threads, "EMU_THREADS"),
             (self.with_dramsim3, "WITH_DRAMSIM3"),
-            (self.trace, "EMU_TRACE")
+            (self.trace, "EMU_TRACE"),
+            ("MinimalConfig", "CONFIG"),
         ]
         args = filter(lambda arg: arg[0] is not None, makefile_args)
         return args
