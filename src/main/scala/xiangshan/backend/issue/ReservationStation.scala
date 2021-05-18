@@ -42,7 +42,8 @@ class ReservationStation
   fastWakeup: Boolean,
   feedback: Boolean,
   enqNum: Int,
-  deqNum: Int
+  deqNum: Int,
+  empty: Boolean = false
 )(implicit p: Parameters) extends XSModule {
   val iqIdxWidth = log2Up(iqSize+1)
   val nonBlocked = if (exuCfg == MulDivExeUnitCfg) false else fixedDelay >= 0
@@ -95,7 +96,7 @@ class ReservationStation
     val rsIdx = if (config.hasFeedback) Output(UInt(log2Up(iqSize).W)) else null
     val isFirstIssue = if (config.hasFeedback) Output(Bool()) else null // NOTE: just use for tlb perf cnt
   })
-
+if (!empty){
   val statusArray = Module(new StatusArray(config))
   val select = Module(new SelectPolicy(config))
   val dataArray = Module(new DataArray(config))
@@ -363,5 +364,13 @@ class ReservationStation
   for (deq <- io.deq) {
     XSDebug(deq.fire(), p"deq fire, roqIdx ${deq.bits.uop.roqIdx}\n")
     XSDebug(deq.valid && !deq.ready, p"deq blocked, roqIdx ${deq.bits.uop.roqIdx}\n")
+  }
+}
+  if (empty) {
+    io := DontCare
+    io.fromDispatch.map(_.ready := false.B)
+    io.deq.map(_.valid := false.B)
+    io.fastUopOut.map(_.valid := false.B)
+    io.numExist := (config.numEntries - 1).U
   }
 }
