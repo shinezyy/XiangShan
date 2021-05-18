@@ -28,6 +28,8 @@ class FmacExeUnit(empty: Int)(implicit p: Parameters) extends Exu(FmacExeUnitCfg
   }
   else {
     io := DontCare
+    fma.rm := DontCare
+    fma.io := DontCare
     io.out.valid := false.B
     io.fromFp.ready := false.B
   }
