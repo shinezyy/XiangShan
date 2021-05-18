@@ -126,7 +126,7 @@ class FloatBlock
       s"delay:${certainLatency}"
     )
 
-    val rs = Module(new ReservationStation(s"rs_${cfg.name}", cfg, IssQueSize, XLEN + 1,
+    val rs = Module(new ReservationStation(s"rs_${cfg.name}", cfg, 2, XLEN + 1,
       inBlockFastPorts.map(_._1).length,
       slowPorts.length,
       fixedDelay = certainLatency,
