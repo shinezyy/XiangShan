@@ -133,7 +133,7 @@ class IntegerBlock
   val mul_rs_0 = Module(new ReservationStation("rs_mul_0", MulDivExeUnitCfg, IssQueSize, XLEN, 6, 4, 2, false, false, 1, 1))
   val mul_rs_1 = Module(new ReservationStation("rs_mul_1", MulDivExeUnitCfg, IssQueSize, XLEN, 6, 4, 2, false, false, 1, 1))
   val alu_rs_0 = Module(new ReservationStation("rs_alu_0", AluExeUnitCfg, 2*IssQueSize, XLEN,
-    8, 4, 0, true, false, 2, 2
+    8, 4, 0, true, false, 4, 2
   ))
   // val alu_rs_1 = Module(new ReservationStation("rs_alu_1", AluExeUnitCfg, 2*IssQueSize, XLEN,
   //   8, 4, 0, true, false, 2, 2
@@ -164,22 +164,23 @@ class IntegerBlock
   mul_rs_1.io.fastDatas <> mulFastData ++ aluFastData
   mul_rs_1.io.deq(0) <> mduExeUnits(1).io.fromInt
 
-  io.toCtrlBlock.numExist(3) := alu_rs_0.io.numExist >> 1
-  io.toCtrlBlock.numExist(4) := alu_rs_0.io.numExist >> 1
-  alu_rs_0.io.fromDispatch <> VecInit(io.fromCtrlBlock.enqIqCtrl.drop(3).take(2))
+  io.toCtrlBlock.numExist(3) := LFSR64()
+  io.toCtrlBlock.numExist(4) := LFSR64()
+  alu_rs_0.io.fromDispatch <> VecInit(io.fromCtrlBlock.enqIqCtrl.drop(3).take(4))
   alu_rs_0.io.srcRegValue(0) <> VecInit(intRf.io.readPorts.take(2).map(_.data))
   alu_rs_0.io.srcRegValue(1) <> VecInit(intRf.io.readPorts.drop(2).take(2).map(_.data))
+  alu_rs_0.io.srcRegValue(2) <> VecInit(intRf.io.readPorts.drop(4).take(2).map(_.data))
+  alu_rs_0.io.srcRegValue(3) <> VecInit(intRf.io.readPorts.drop(6).take(2).map(_.data))
   alu_rs_0.io.fastDatas <> mulFastData ++ aluFastData ++ memFastData
   alu_rs_0.io.deq(0) <> aluExeUnits(0).io.fromInt
   alu_rs_0.io.deq(1) <> aluExeUnits(1).io.fromInt
 
-  io.toCtrlBlock.numExist(5) := (IssQueSize - 1).U // alu_rs_1.io.numExist >> 1
-  io.toCtrlBlock.numExist(6) := (IssQueSize - 1).U // alu_rs_1.io.numExist >> 1
-  io.fromCtrlBlock.enqIqCtrl(5).ready := false.B
-  io.fromCtrlBlock.enqIqCtrl(6).ready := false.B
+  io.toCtrlBlock.numExist(5) := LFSR64()
+  io.toCtrlBlock.numExist(6) := LFSR64()
+  // io.fromCtrlBlock.enqIqCtrl(5).ready := false.B
+  // io.fromCtrlBlock.enqIqCtrl(6).ready := false.B
   // alu_rs_1.io.fromDispatch <> VecInit(io.fromCtrlBlock.enqIqCtrl.drop(5))
-  // alu_rs_1.io.srcRegValue(0) <> VecInit(intRf.io.readPorts.drop(4).take(2).map(_.data))
-  // alu_rs_1.io.srcRegValue(1) <> VecInit(intRf.io.readPorts.drop(6).take(2).map(_.data))
+
   // alu_rs_1.io.fastDatas <> mulFastData ++ aluFastData ++ memFastData
   // alu_rs_1.io.deq(0) <> aluExeUnits(2).io.fromInt
   // alu_rs_1.io.deq(1) <> aluExeUnits(3).io.fromInt
