@@ -14,13 +14,13 @@ case class SoCParameters
   EnableILA: Boolean = false,
   extIntrs: Int = 150,
   useFakeL3Cache: Boolean = false,
-  L3Size: Int = 4 * 1024 * 1024 // 4MB
+  L3Size: Int = 4 * 1024 * 1024, // 4MB
+  L3NBanks: Int = 4
 ){
   val PAddrBits = cores.map(_.PAddrBits).reduce((x, y) => if(x > y) x else y)
   // L3 configurations
   val L3InnerBusWidth = 256
   val L3BlockSize = 64
-  val L3NBanks = 4
   val L3NWays = 8
 
   // on chip network configurations

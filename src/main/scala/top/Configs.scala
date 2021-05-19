@@ -83,6 +83,7 @@ class MinimalConfig(n: Int = 1) extends Config(
         useFakeL2Cache = true,
       )),
       L3Size = 32 * 1024, // 32KB
+      L3NBanks = 1
     )
   })
 )
