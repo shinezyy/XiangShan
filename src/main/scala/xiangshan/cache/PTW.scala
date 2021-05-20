@@ -406,7 +406,7 @@ class PTWImp(outer: PTW)(implicit p: Parameters) extends PtwModule(outer) {
   fsm.io.mem.resp.bits.data := mem.d.bits.data
   fsm.io.csr := csr
   fsm.io.sfence := sfence
-  fsm.io.resp.ready := MuxLookup(fsm.io.resp.bits.source, false.B,
+  fsm.io.resp.ready := MuxLookup(fsm.io.resp.bits.source, true.B,
     (0 until PtwWidth).map(i => i.U -> outArb(i).in(1).ready))
 
   val memRead =  edge.Get(
