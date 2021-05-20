@@ -7,7 +7,7 @@ import utils._
 import system._
 import chisel3.stage.ChiselGeneratorAnnotation
 import chipsalliance.rocketchip.config._
-import device.{AXI4Plic, TLTimer}
+import device.{AXI4Plic, TLTimer, AXI4IntrGenerator}
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.amba.axi4._
@@ -245,6 +245,15 @@ class XSTopWithoutDMA()(implicit p: Parameters) extends BaseXSSoc()
   val beuSink = LazyModule(new BeuSinkNode())
   beuSink.intSinkNode := beu.intNode
 
+  // interrupt generator (only used in simulation environment)
+  val intrGen = if (debugOpts.FPGAPlatform) null else
+    LazyModule(new AXI4IntrGenerator(
+      Seq(AddressSet(0x38020000L, 0x0000ffffL))
+    ))
+  if (!debugOpts.FPGAPlatform) {
+    intrGen.node := AXI4IdentityNode() := AXI4UserYanker() := TLToAXI4() := peripheralXbar
+  }
+
   val plic = LazyModule(new AXI4Plic(
     Seq(AddressSet(0x3c000000L, 0x03ffffffL)),
     NumCores, NrExtIntr + 1,
@@ -295,7 +304,8 @@ class XSTopWithoutDMA()(implicit p: Parameters) extends BaseXSSoc()
     }
 
     withClockAndReset(childClock, childReset) {
-      plic.module.io.extra.get.intrVec <> Cat(beuSink.module.interrupt, io.extIntrs)
+      val extIntrs = if (debugOpts.FPGAPlatform) io.extIntrs else intrGen.module.io.extra.get.intrVec(NrExtIntr - 1, 0)
+      plic.module.io.extra.get.intrVec <> Cat(beuSink.module.interrupt, extIntrs)
 
       for (i <- 0 until NumCores) {
         val core_reset_gen = Module(new ResetGen(1, !debugOpts.FPGAPlatform))
