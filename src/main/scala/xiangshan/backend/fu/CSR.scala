@@ -588,13 +588,14 @@ class CSR(implicit p: Parameters) extends FunctionUnit with HasCSRConst
   val addr = src2(11, 0)
   val csri = ZeroExt(src2(16, 12), XLEN)
   val rdata = Wire(UInt(XLEN.W))
+  val rdataDummy = Wire(UInt(XLEN.W))
   val wdata = LookupTree(func, List(
     CSROpType.wrt  -> src1,
-    CSROpType.set  -> (rdata | src1),
-    CSROpType.clr  -> (rdata & (~src1).asUInt()),
+    CSROpType.set  -> (rdataDummy | src1),
+    CSROpType.clr  -> (rdataDummy & (~src1).asUInt()),
     CSROpType.wrti -> csri,
-    CSROpType.seti -> (rdata | csri),
-    CSROpType.clri -> (rdata & (~csri).asUInt())
+    CSROpType.seti -> (rdataDummy | csri),
+    CSROpType.clri -> (rdataDummy & (~csri).asUInt())
   ))
 
   val addrInPerfCnt = (addr >= Mcycle.U) && (addr <= Mhpmcounter31.U)
@@ -621,7 +622,6 @@ class CSR(implicit p: Parameters) extends FunctionUnit with HasCSRConst
     MaskedRegMap(Mip, mipReg.asUInt, mipFixMask),
     MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
   )
-  val rdataDummy = Wire(UInt(XLEN.W))
   MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
 
   when (csrio.fpu.fflags.valid) {
