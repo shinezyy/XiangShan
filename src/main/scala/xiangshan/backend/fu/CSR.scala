@@ -622,7 +622,15 @@ class CSR(implicit p: Parameters) extends FunctionUnit with HasCSRConst
     MaskedRegMap(Sip, mipReg.asUInt, sipMask, MaskedRegMap.NoSideEffect, sipMask)
   )
   val rdataDummy = Wire(UInt(XLEN.W))
-  MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdata)
+  val wdataDummy = LookupTree(func, List(
+    CSROpType.wrt  -> src1,
+    CSROpType.set  -> (rdataDummy | src1),
+    CSROpType.clr  -> (rdataDummy & (~src1).asUInt()),
+    CSROpType.wrti -> csri,
+    CSROpType.seti -> (rdataDummy | csri),
+    CSROpType.clri -> (rdataDummy & (~csri).asUInt())
+  ))
+  MaskedRegMap.generate(fixMapping, addr, rdataDummy, wen, wdataDummy)
 
   when (csrio.fpu.fflags.valid) {
     fcsr := fflags_wfn(update = true)(csrio.fpu.fflags.bits)
