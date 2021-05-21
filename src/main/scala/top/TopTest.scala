@@ -49,12 +49,11 @@ object TestMain extends App with HasRocketChipStageUtils {
     val (config, firrtlOpts) = ArgParser.parse(args)
     XiangShanStage.execute(firrtlOpts, Seq(
       ChiselGeneratorAnnotation(() => {
-        val soc = LazyModule(new TestTop()(config))
+        val soc = LazyModule(new TestTop()(config.alterPartial{
+          case XSCoreParamsKey => config(SoCParamsKey).cores.head
+        }))
         soc.module
       })
     ))
-    ElaborationArtefacts.files.foreach{ case (extension, contents) =>
-      writeOutputFile("./build", s"XSTop.${extension}", contents())
-    }
   }
 }
