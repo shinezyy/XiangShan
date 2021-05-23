@@ -353,19 +353,19 @@ class PTWImp(outer: PTW)(implicit p: Parameters) extends PtwModule(outer) {
 
   // NOTE: when cache out but miss and fsm doesnt accept,
   val blockNewReq = false.B
-  arb1.io.in.take(PtwWidth).zip(io.tlb.map(_.req(0))).map{ 
+  arb1.io.in.take(PtwWidth).zip(io.tlb.map(_.req(0))).map{
     case (in, out) => in <> out
   }
   arb1.io.out.ready := arb2.io.in(1).ready && !blockNewReq
-  
+
   if (EnablePtwPrefetch) {
     val PrefetchChannel = PtwWidth
     val pre = Module(new PTWPrefetcherNextLine)
-    
+
     arb1.io.in(PrefetchChannel) <> pre.io.req
     pre.io.probe.valid := arb1.io.out.fire() && arb1.io.chosen =/= PrefetchChannel.U
     pre.io.probe.bits.vpn := arb1.io.out.bits.vpn
-    
+
     pre.io.sfence := sfence
   }
 
@@ -912,7 +912,7 @@ class PtwCache()(implicit p: Parameters) extends XSModule with HasPtwConst {
   val spHitLevel = spHitData.level.getOrElse(0.U)
 
   val resp = Wire(io.resp.bits.cloneType)
-  val resp_latch = RegEnable(resp, io.resp.valid && !io.resp.ready)
+  val resp_latch = RegEnable(io.resp.bits, io.resp.valid && !io.resp.ready)
   val resp_latch_valid = ValidHold(io.resp.valid && !io.resp.ready, io.resp.ready, sfence.valid)
   second_ready := !(second_valid || resp_latch_valid) || io.resp.fire()
   resp.source   := second_req.source
