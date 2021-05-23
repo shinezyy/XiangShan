@@ -5,12 +5,12 @@ import chisel3.util._
 import xiangshan.backend.exu.Exu.fmacExeUnitCfg
 import xiangshan.backend.fu.fpu._
 
-class FmacExeUnit extends Exu(fmacExeUnitCfg)
+class FmacExeUnit(empty: Int) extends Exu(fmacExeUnitCfg)
 {
   val frm = IO(Input(UInt(3.W)))
 
   val fma = supportedFunctionUnits.head.asInstanceOf[FMA]
-
+if (empty<1) {
   val input = io.fromFp.bits
   val fmaOut = fma.io.out.bits
   val isRVD = !io.fromFp.bits.uop.ctrl.isRVF
@@ -24,4 +24,12 @@ class FmacExeUnit extends Exu(fmacExeUnitCfg)
 
   io.out.bits.data := box(fma.io.out.bits.data, fma.io.out.bits.uop.ctrl.fpu.typeTagOut)
   io.out.bits.fflags := fma.fflags
+}
+else {
+  io := DontCare
+  fma.rm := DontCare
+  fma.io := DontCare
+  io.out.valid := false.B
+  io.fromFp.ready := false.B
+}
 }

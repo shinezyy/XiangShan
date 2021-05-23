@@ -91,6 +91,7 @@ class ReservationStation
   fixedDelay: Int,
   fastWakeup: Boolean,
   feedback: Boolean,
+  empty: Boolean
 ) extends XSModule {
   val iqIdxWidth = log2Up(iqSize)
   val nonBlocked = fixedDelay >= 0
@@ -123,7 +124,7 @@ class ReservationStation
     val rsIdx = if (feedback) Output(UInt(log2Up(IssQueSize).W)) else null
     val isFirstIssue = if (feedback) Output(Bool()) else null // NOTE: just use for tlb perf cnt
   })
-
+if (!empty) {
   val select = Module(new ReservationStationSelect(exuCfg, iqSize, srcLen, fastPortsCfg, slowPortsCfg, fixedDelay, fastWakeup, feedback))
   val ctrl   = Module(new ReservationStationCtrl(exuCfg, iqSize, srcLen, fastPortsCfg, slowPortsCfg, fixedDelay, fastWakeup, feedback))
   val data   = Module(new ReservationStationData(exuCfg, iqSize, srcLen, fastPortsCfg, slowPortsCfg, fixedDelay, fastWakeup, feedback))
@@ -197,6 +198,14 @@ class ReservationStation
   if (srcNum > 1) { io.deq.bits.src2 := data.io.out(1) }
   if (srcNum > 2) { io.deq.bits.src3 := data.io.out(2) }
   if (exuCfg == Exu.jumpExeUnitCfg) { io.deq.bits.uop.cf.pc := data.io.pc }
+}
+else {
+  io := DontCare
+  io.fromDispatch.ready := false.B
+  io.deq.valid := false.B
+  io.fastUopOut.valid := false.B
+  io.numExist := (iqSize - 1).U
+}
 }
 
 class ReservationStationSelect

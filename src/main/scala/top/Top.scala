@@ -215,7 +215,7 @@ class XSTop()(implicit p: config.Parameters) extends BaseXSSoc()
       enablePerf = false
     ),
     InclusiveCacheMicroParameters(
-      memCycles = 25,
+      memCycles = 10,
       writeBytes = 32
     ),
     fpga = env.FPGAPlatform

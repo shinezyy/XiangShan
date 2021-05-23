@@ -77,7 +77,7 @@ class FloatBlock
     len = XLEN + 1
   ))
 
-  val fmacExeUnits = Array.tabulate(exuParameters.FmacCnt)(_ => Module(new FmacExeUnit))
+  val fmacExeUnits = Array.tabulate(exuParameters.FmacCnt)(i => Module(new FmacExeUnit(i)))
   val fmiscExeUnits = Array.tabulate(exuParameters.FmiscCnt)(_ => Module(new FmiscExeUnit))
 
   fmacExeUnits.foreach(_.frm := io.frm)
@@ -119,7 +119,8 @@ class FloatBlock
       slowPorts.map(_._1),
       fixedDelay = certainLatency,
       fastWakeup = certainLatency >= 0,
-      feedback = false
+      feedback = false,
+      empty = i == 1 || i == 2 || i == 3
     ))
 
     rs.io.redirect <> redirect // TODO: remove it

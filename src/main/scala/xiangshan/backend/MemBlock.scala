@@ -180,7 +180,7 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
       slowPorts.map(_._1),
       fixedDelay = certainLatency,
       fastWakeup = certainLatency >= 0,
-      feedback = feedback)
+      feedback = feedback, empty = false)
     )
 
     rs.io.redirect <> redirect // TODO: remove it
