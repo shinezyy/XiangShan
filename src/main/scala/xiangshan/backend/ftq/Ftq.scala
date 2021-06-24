@@ -142,12 +142,12 @@ class Ftq extends XSModule with HasCircularQueuePtrHelper {
   val real_fire = io.enq.fire() && !stage2Flush && !stage3Flush
 
   val ftq_pc_mem = Module(new SyncDataModuleTemplate(new Ftq_4R_SRAMEntry, FtqSize, 9, 1))
-  ftq_pc_mem.io.wen(0) := real_fire
-  ftq_pc_mem.io.waddr(0) := tailPtr.value
-  ftq_pc_mem.io.wdata(0).ftqPC := io.enq.bits.ftqPC
-  ftq_pc_mem.io.wdata(0).lastPacketPC := io.enq.bits.lastPacketPC
-  ftq_pc_mem.io.wdata(0).hist := io.enq.bits.hist
-  ftq_pc_mem.io.wdata(0).br_mask := io.enq.bits.br_mask
+  ftq_pc_mem.io.wen(0) := RegNext(RegNext(RegNext(real_fire)))
+  ftq_pc_mem.io.waddr(0) := RegNext(RegNext(RegNext(tailPtr.value)))
+  ftq_pc_mem.io.wdata(0).ftqPC := RegNext(RegNext(RegNext(io.enq.bits.ftqPC)))
+  ftq_pc_mem.io.wdata(0).lastPacketPC := RegNext(RegNext(RegNext(io.enq.bits.lastPacketPC)))
+  ftq_pc_mem.io.wdata(0).hist := RegNext(RegNext(RegNext(io.enq.bits.hist)))
+  ftq_pc_mem.io.wdata(0).br_mask := RegNext(RegNext(RegNext(io.enq.bits.br_mask)))
   val ftq_2r_sram = Module(new FtqNRSRAM(new Ftq_2R_SRAMEntry, 2))
   ftq_2r_sram.io.wen := real_fire
   ftq_2r_sram.io.waddr := tailPtr.value
