@@ -224,7 +224,8 @@ class XiangShan(object):
             "cputest": self.__get_ci_cputest,
             "riscv-tests": self.__get_ci_rvtest,
             "microbench": self.__am_apps_path,
-            "coremark": self.__am_apps_path
+            "coremark": self.__am_apps_path,
+            "dhrystone": self.__am_apps_path
         }
         for target in all_tests.get(test, self.__get_ci_workloads)(test):
             print(target)

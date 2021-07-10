@@ -53,6 +53,10 @@ jobs:
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --threads 8 --numa --ci coremark 2> perf.log
           cat perf.log | sort | tee $PERF_HOME/coremark.log
+      - name: Simple Test - Dhrystone
+        run: |
+          python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --threads 8 --numa --ci dhrystone 2> perf.log
+          cat perf.log | sort | tee $PERF_HOME/dhrystone.log
       - name: System Test - Linux
         run: |
           python3 $GITHUB_WORKSPACE/scripts/xiangshan.py --threads 8 --numa --ci linux-hello 2> perf.log
