@@ -27,7 +27,7 @@ class FlashHelper extends BlackBox with HasBlackBoxInline {
     val ren = Input(Bool())
     val data = Output(UInt(64.W))
     val addr = Input(UInt(32.W))
-  })
+  }).suggestName("io")
 
   setInline("FlashHelper.v",
     s"""

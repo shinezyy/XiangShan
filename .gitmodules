@@ -1,9 +1,9 @@
 [submodule "rocket-chip"]
 	path = rocket-chip
-	url = https://github.com/OpenXiangShan/rocket-chip.git
+	url = https://github.com/shinezyy/rocket-chip-1.git
 [submodule "block-inclusivecache-sifive"]
 	path = block-inclusivecache-sifive
-	url = https://github.com/OpenXiangShan/block-inclusivecache-sifive.git
+	url = https://github.com/shinezyy/block-inclusivecache-sifive.git
 [submodule "chiseltest"]
 	path = chiseltest
 	url = https://github.com/ucb-bar/chisel-testers2.git
@@ -17,3 +17,9 @@
 [submodule "ready-to-run"]
 	path = ready-to-run
 	url = https://github.com/OpenXiangShan/ready-to-run
+[submodule "firrtl"]
+	path = firrtl
+	url = https://github.com/chipsalliance/firrtl.git
+[submodule "chisel3"]
+	path = chisel3
+	url = https://github.com/chipsalliance/chisel3.git

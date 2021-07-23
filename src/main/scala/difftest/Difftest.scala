@@ -131,45 +131,45 @@ class DiffPtwEventIO extends DifftestBundle {
 }
 
 class DifftestArchEvent extends BlackBox {
-  val io = IO(new DiffArchEventIO)
+  val io = IO(new DiffArchEventIO).suggestName("io")
 }
 
 class DifftestInstrCommit extends BlackBox {
-  val io = IO(new DiffInstrCommitIO)
+  val io = IO(new DiffInstrCommitIO).suggestName("io")
 }
 
 class DifftestTrapEvent extends BlackBox {
-  val io = IO(new DiffTrapEventIO)
+  val io = IO(new DiffTrapEventIO).suggestName("io")
 }
 
 class DifftestCSRState extends BlackBox {
-  val io = IO(new DiffCSRStateIO)
+  val io = IO(new DiffCSRStateIO).suggestName("io")
 }
 
 class DifftestArchIntRegState extends BlackBox {
-  val io = IO(new DiffArchIntRegStateIO)
+  val io = IO(new DiffArchIntRegStateIO).suggestName("io")
 }
 
 class DifftestArchFpRegState extends BlackBox {
-  val io = IO(new DiffArchFpRegStateIO)
+  val io = IO(new DiffArchFpRegStateIO).suggestName("io")
 }
 
 class DifftestSbufferEvent extends BlackBox {
-  val io = IO(new DiffSbufferEventIO)
+  val io = IO(new DiffSbufferEventIO).suggestName("io")
 }
 
 class DifftestStoreEvent extends BlackBox {
-  val io = IO(new DiffStoreEventIO)
+  val io = IO(new DiffStoreEventIO).suggestName("io")
 }
 
 class DifftestLoadEvent extends BlackBox {
-  val io = IO(new DiffLoadEventIO)
+  val io = IO(new DiffLoadEventIO).suggestName("io")
 }
 
 class DifftestAtomicEvent extends BlackBox {
-  val io = IO(new DiffAtomicEventIO)
+  val io = IO(new DiffAtomicEventIO).suggestName("io")
 }
 
 class DifftestPtwEvent extends BlackBox {
-  val io = IO(new DiffPtwEventIO)
+  val io = IO(new DiffPtwEventIO).suggestName("io")
 }

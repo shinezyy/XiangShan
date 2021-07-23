@@ -168,11 +168,11 @@ class regfile_160x64_10w16r_sim extends BlackBox with HasBlackBoxResource {
     val raddr8, raddr9, raddr10, raddr11, raddr12, raddr13, raddr14, raddr15 = Input(UInt(8.W))
     val rdata0, rdata1, rdata2, rdata3, rdata4, rdata5, rdata6, rdata7 = Output(UInt(64.W))
     val rdata8, rdata9, rdata10, rdata11, rdata12, rdata13, rdata14, rdata15 = Output(UInt(64.W))
-  })
+  }).suggestName("io")
 
   val vsrc = "/vsrc/regfile_160x64_10w16r_sim.v"
   println(s"Regfile: Using verilog source at: $vsrc")
-  setResource(vsrc)
+  addResource(vsrc)
 
 }
 

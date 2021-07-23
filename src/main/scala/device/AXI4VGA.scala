@@ -95,7 +95,7 @@ class FBHelper extends BlackBox with HasBlackBoxInline {
     val valid = Input(Bool())
     val pixel = Input(UInt(32.W))
     val sync = Input(Bool())
-  })
+  }).suggestName("io")
 
   setInline("FBHelper.v",
     s"""

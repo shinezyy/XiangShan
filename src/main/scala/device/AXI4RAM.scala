@@ -35,7 +35,7 @@ class RAMHelper(memByte: BigInt) extends BlackBox {
     val wdata = Input(UInt(DataBits.W))
     val wmask = Input(UInt(DataBits.W))
     val wen   = Input(Bool())
-  })
+  }).suggestName("io")
 }
 
 class AXI4RAM

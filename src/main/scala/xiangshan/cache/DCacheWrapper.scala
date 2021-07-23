@@ -377,7 +377,7 @@ class AMOHelper() extends BlackBox {
     val wdata  = Input(UInt(64.W))
     val mask   = Input(UInt(8.W))
     val rdata  = Output(UInt(64.W))
-  })
+  }).suggestName("io")
 }
 
 class FakeDCache()(implicit p: Parameters) extends XSModule with HasDCacheParameters {
