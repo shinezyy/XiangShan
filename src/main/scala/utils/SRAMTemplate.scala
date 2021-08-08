@@ -33,6 +33,8 @@ package utils
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.loadMemoryFromFileInline
+import chisel3.experimental.doNotDedup
 
 class SRAMBundleA(val set: Int) extends Bundle {
   val setIdx = Output(UInt(log2Up(set).W))
@@ -90,15 +92,42 @@ class SRAMWriteBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1
 }
 
 class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
-  shouldReset: Boolean = false, holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false) extends Module {
+  shouldReset: Boolean = false, holdRead: Boolean = false, singlePort: Boolean = false, bypassWrite: Boolean = false,
+  initiate: Boolean = false, modulePrefix: String = "",
+  bankID: Int = -1, organization: String = "",
+  wayID: Int = -1, blockID: Int = -1,
+  ) extends Module {
   val io = IO(new Bundle {
     val r = Flipped(new SRAMReadBus(gen, set, way))
     val w = Flipped(new SRAMWriteBus(gen, set, way))
   })
 
   val wordType = UInt(gen.getWidth.W)
-  val array = SyncReadMem(set, Vec(way, wordType))
+  // val array = SyncReadMem(set, Vec(way, wordType))
+  val arrays = Seq.fill(way)(SyncReadMem(set, wordType))
   val (resetState, resetSet) = (WireInit(false.B), WireInit(0.U))
+
+  if (initiate) {
+    assume(modulePrefix.trim.nonEmpty)
+    assume(organization.trim.nonEmpty)
+    val allowed_organizations = List("splitway_Senk")
+    assume(allowed_organizations contains organization)
+    assume(bankID >= 0)
+
+    arrays.zipWithIndex.foreach {
+      case(array, i) =>
+        val ram_initiator = 
+          if (wayID == -1) {
+            s"${modulePrefix}_${organization}_bank${bankID}_way${i}_block${blockID}.txt"
+          } else {
+            require(way == 1)
+            s"${modulePrefix}_${organization}_bank${bankID}_way${wayID}_block${blockID}.txt"
+          }
+        val init_file = "./" + ram_initiator
+        loadMemoryFromFileInline(array, init_file)
+        println(init_file)
+    }
+  }
 
   if (shouldReset) {
     val _resetState = RegInit(true.B)
@@ -115,9 +144,17 @@ class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
   val setIdx = Mux(resetState, resetSet, io.w.req.bits.setIdx)
   val wdata = VecInit(Mux(resetState, 0.U.asTypeOf(Vec(way, gen)), io.w.req.bits.data).map(_.asTypeOf(wordType)))
   val waymask = Mux(resetState, Fill(way, "b1".U), io.w.req.bits.waymask.getOrElse("b1".U))
-  when (wen) { array.write(setIdx, wdata, waymask.asBools) }
 
-  val raw_rdata = array.read(io.r.req.bits.setIdx, realRen)
+  arrays.zipWithIndex.zip(wdata).foreach {
+    case ((array, i), wdata_s) =>
+      when (wen && waymask(i)) {
+        array.write(setIdx, wdata_s)
+      }
+  }
+
+  val raw_rdata = VecInit(arrays.map (
+    _.read(io.r.req.bits.setIdx, realRen).asTypeOf(wordType)
+  ))
 
   // bypass for dual-port SRAMs
   require(!bypassWrite || bypassWrite && !singlePort)
@@ -141,9 +178,8 @@ class SRAMTemplate[T <: Data](gen: T, set: Int, way: Int = 1,
 
   // hold read data for SRAMs
   val rdata = (if (holdRead) HoldUnless(mem_rdata, RegNext(realRen))
-              else mem_rdata).map(_.asTypeOf(gen))
-
-  io.r.resp.data := VecInit(rdata)
+      else mem_rdata)
+  io.r.resp.data := VecInit(rdata.map(_.asTypeOf(gen)))
   io.r.req.ready := !resetState && (if (singlePort) !wen else true.B)
   io.w.req.ready := true.B
 

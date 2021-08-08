@@ -23,6 +23,8 @@ import system.L1CacheErrorInfo
 import utils.{Code, ParallelOR, ReplacementPolicy, SRAMTemplate, XSDebug}
 
 import scala.math.max
+import chisel3.experimental.doNotDedup
+import bus.tilelink.ClientStates
 
 
 // DCache specific parameters
@@ -232,7 +234,7 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
   })
 
   // wrap a data row and a ecc row
-  class DataSRAMGroup extends Module {
+  class DataSRAMGroup(blockID: Int) extends Module {
     val io = IO(new Bundle() {
       val wen, ren = Input(Bool())
       val waddr, raddr = Input(UInt())
@@ -242,15 +244,22 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
     })
 
     val r_way_en_reg = RegNext(io.r_way_en)
-    val data_array = Array.fill(nWays) {
-      Module(new SRAMTemplate(
+    val data_array = Array.range(0, nWays).map {
+      w => { val m = Module(new SRAMTemplate(
         Bits(rowBits.W),
         set = nSets,
         way = 1,
         shouldReset = false,
         holdRead = false,
-        singlePort = singlePort
+        singlePort = singlePort,
+
+        initiate = true, modulePrefix = "l1_dcache_data",
+        bankID = 0, organization = "splitway_Senk",
+        wayID = w, blockID = blockID,
       ))
+      doNotDedup(m)
+      m
+      }
     }
 
     for (w <- 0 until nWays) {
@@ -311,7 +320,7 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
       ecc_array.io.r.req.valid := io.read(j).valid && rmask(r)
       ecc_array.io.r.req.bits.apply(setIdx = raddr)
 
-      val dataGroup = Module(new DataSRAMGroup)
+      val dataGroup = Module(new DataSRAMGroup(r))
       dataGroup.io.wen := io.write.valid && io.write.bits.wmask(r)
       dataGroup.io.w_way_en := io.write.bits.way_en
       dataGroup.io.waddr := waddr
@@ -362,7 +371,8 @@ class L1MetadataArray(onReset: () => L1Metadata)(implicit p: Parameters) extends
     val error = Output(new L1CacheErrorInfo)
   })
   val rst_cnt = RegInit(0.U(log2Up(nSets + 1).W))
-  val rst = rst_cnt < nSets.U
+  // val rst = rst_cnt < nSets.U
+  val rst = RegInit(false.B)
   val waddr = Mux(rst, rst_cnt, io.write.bits.idx)
   val wdata = Mux(rst, rstVal, io.write.bits.data).asUInt
   val wmask = Mux(rst || (nWays == 1).B, (-1).asSInt, io.write.bits.way_en.asSInt).asBools
@@ -373,7 +383,12 @@ class L1MetadataArray(onReset: () => L1Metadata)(implicit p: Parameters) extends
 
   println(s"coh bits: ${ClientStates.width}, tag bits: ${tagBits}, enc meta bits: ${encMetaBits}")
   val tag_array = Module(new SRAMTemplate(UInt(encMetaBits.W), set = nSets, way = nWays,
-    shouldReset = false, holdRead = false, singlePort = true))
+    shouldReset = false, holdRead = false, singlePort = true,
+    initiate = true, modulePrefix = "l1_dcache_tag",
+    bankID = 0, organization = "splitway_Senk",
+    blockID = 0,
+    ))
+  doNotDedup(tag_array)
 
   // tag write
   val wen = rst || io.write.valid
@@ -432,7 +447,7 @@ class L1MetadataArray(onReset: () => L1Metadata)(implicit p: Parameters) extends
 }
 
 class DuplicatedMetaArray(implicit p: Parameters) extends DCacheModule {
-  def onReset = L1Metadata(0.U, ClientMetadata.onReset)
+  def onReset = L1Metadata(0xbeef.U, ClientMetadata.onReset)
 
   val metaBits = onReset.getWidth
   val encMetaBits = cacheParams.tagCode.width(metaBits)

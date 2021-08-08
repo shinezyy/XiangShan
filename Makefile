@@ -81,7 +81,7 @@ $(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	@date -R | tee -a $(TIMELOG)
 	$(TIME_CMD) mill XiangShan.test.runMain $(SIMTOP) -td $(@D)      \
 		--config $(CONFIG) --full-stacktrace --output-file $(@F)     \
-		--infer-rw -ll info\
+		--infer-rw \
 		--num-cores $(NUM_CORES) $(SIM_ARGS)
 	# $(MEM_GEN) $(@D)/$(@F).conf --output_file $(@D)/$(@F).sram.v
 	# @git log -n 1 >> .__head__
