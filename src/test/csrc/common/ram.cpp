@@ -14,6 +14,7 @@
 ***************************************************************************************/
 
 #include <sys/mman.h>
+#include <fcntl.h>
 
 #include "common.h"
 #include "ram.h"
@@ -27,7 +28,7 @@ CoDRAMsim3 *dram = NULL;
 #endif
 
 static uint64_t *ram;
-static long img_size = 0;
+static long img_size = 0L;
 static pthread_mutex_t ram_mutex;
 
 void* get_img_start() { return &ram[0]; }
@@ -121,14 +122,25 @@ void addpageSv39() {
 }
 #endif
 
-void init_ram(const char *img) {
+void init_ram(const char *img, bool mmap_image) {
   assert(img != NULL);
 
   printf("The image is %s\n", img);
 
   // initialize memory using Linux mmap
   printf("Using simulated %luMB RAM\n", EMU_RAM_SIZE / (1024 * 1024));
-  ram = (uint64_t *)mmap(NULL, EMU_RAM_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+  if (mmap_image) {
+      printf("Mmaping to image file\n");
+      const char *backFile = img;
+      int fd =  open(backFile, O_RDONLY, (mode_t)0400);
+      // private to leave the file clean
+      ram = (uint64_t *)mmap(NULL, EMU_RAM_SIZE, PROT_READ | PROT_WRITE, MAP_FILE | MAP_PRIVATE, fd, 0);
+  } else {
+      printf("Create new backed memory with mmap\n");
+      // Anonymous
+      ram = (uint64_t *)mmap(NULL, EMU_RAM_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+  }
+
   if (ram == (uint64_t *)MAP_FAILED) {
     printf("Cound not mmap 0x%lx bytes\n", EMU_RAM_SIZE);
     assert(0);
@@ -140,6 +152,10 @@ void init_ram(const char *img) {
   //new end
 #endif
 
+  if (!mmap_image) {
+  // no indent here to keep git log clean
+
+  printf("Initiate memory from image file\n");
   int ret;
   if (isGzFile(img)) {
     printf("Gzip file detected and loading image from extracted gz file\n");
@@ -164,6 +180,11 @@ void init_ram(const char *img) {
 
     assert(ret == 1);
     fclose(fp);
+  }
+
+  } else {
+    printf("Not initiating memory\n");
+    img_size = 0x200000000L;
   }
 
 #ifdef WITH_DRAMSIM3

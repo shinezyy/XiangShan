@@ -68,6 +68,7 @@ struct EmuArgs {
   bool enable_snapshot;
   bool force_dump_result;
   bool enable_diff;
+  bool mmap_image;
 
   EmuArgs() {
     seed = 0;

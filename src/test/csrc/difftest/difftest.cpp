@@ -279,6 +279,7 @@ void Difftest::do_first_instr_commit() {
     nemu_this_pc = dut.csr.this_pc;
 
     proxy->memcpy_from_dut(0x80000000, get_img_start(), get_img_size());
+    printf("Image size: %li \n", get_img_size());
     proxy->set_regs(dut_regs_ptr);
 
     printf("The first instruction of core %d has commited. Difftest enabled. \n", id);

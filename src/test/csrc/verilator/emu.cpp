@@ -39,6 +39,7 @@ static inline void print_help(const char *file) {
   printf("  -i, --image=FILE           run with this image file\n");
   printf("  -b, --log-begin=NUM        display log from NUM th cycle\n");
   printf("  -e, --log-end=NUM          stop display log at NUM th cycle\n");
+  printf("  -M, --mmap-image           Mmap to image directly\n");
   printf("      --force-dump-result    force dump performance counter result in the end\n");
   printf("      --load-snapshot=PATH   load snapshot from PATH\n");
   printf("      --no-snapshot          disable saving snapshots\n");
@@ -69,12 +70,13 @@ inline EmuArgs parse_args(int argc, const char *argv[]) {
     { "log-begin",         1, NULL, 'b' },
     { "log-end",           1, NULL, 'e' },
     { "help",              0, NULL, 'h' },
+    { "mmap-image",        0, NULL, 'M' },
     { 0,                   0, NULL,  0  }
   };
 
   int o;
   while ( (o = getopt_long(argc, const_cast<char *const*>(argv),
-          "-s:C:I:W:hi:m:b:e:", long_options, &long_index)) != -1) {
+          "-s:C:I:W:hi:m:b:e:M", long_options, &long_index)) != -1) {
     switch (o) {
       case 0:
         switch (long_index) {
@@ -102,6 +104,7 @@ inline EmuArgs parse_args(int argc, const char *argv[]) {
       case 'i': args.image = optarg; break;
       case 'b': args.log_begin = atoll(optarg);  break;
       case 'e': args.log_end = atoll(optarg); break;
+      case 'M': args.mmap_image = true; break;
     }
   }
 
@@ -126,7 +129,7 @@ Emulator::Emulator(int argc, const char *argv[]):
   reset_ncycles(10);
 
   // init ram
-  init_ram(args.image);
+  init_ram(args.image, args.mmap_image);
 
 #if VM_TRACE == 1
 #ifndef EN_FORKWAIT
