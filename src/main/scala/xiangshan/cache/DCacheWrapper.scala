@@ -87,6 +87,7 @@ class Refill(implicit p: Parameters) extends DCacheBundle
   val data   = UInt((cfg.blockBytes * 8).W)
   def dump() = {
     XSDebug("Refill: addr: %x data: %x\n", addr, data)
+    printf("Refill: addr: %x data: %x\n", addr, data)
   }
 }
 
@@ -194,6 +195,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
   metaArray.io.read(LoadPipelineWidth - 1) <> metaReadArb.io.out
 
   ldu(LoadPipelineWidth - 1).io.meta_resp <> metaArray.io.resp(LoadPipelineWidth - 1)
+  metaArray.dump()
   mainPipe.io.meta_resp <> metaArray.io.resp(LoadPipelineWidth - 1)
 
   for (w <- 0 until (LoadPipelineWidth - 1)) {
@@ -269,6 +271,11 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
 
   // refill to load queue
   io.lsu.lsq <> missQueue.io.refill
+
+  when (missQueue.io.refill.valid) {
+    printf("Refilling 0x%x\n", missQueue.io.refill.bits.addr)
+    missQueue.io.refill.bits.dump();
+  }
 
   // tilelink stuff
   bus.a <> missQueue.io.mem_acquire
