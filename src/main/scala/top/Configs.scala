@@ -79,23 +79,23 @@ class MinimalConfig(n: Int = 1) extends Config(
         ),
         icacheParameters = ICacheParameters(
           nSets = 64, // 16KB ICache
-          tagECC = Some("parity"),
-          dataECC = Some("parity"),
+          tagECC = Some("none"),
+          dataECC = Some("none"),
           replacer = Some("setplru"),
           nMissEntries = 2
         ),
         dcacheParameters = DCacheParameters(
           nSets = 64, // 32KB DCache
           nWays = 8,
-          tagECC = Some("secded"),
-          dataECC = Some("secded"),
+          tagECC = Some("none"),
+          dataECC = Some("none"),
           replacer = Some("setplru"),
           nMissEntries = 4,
           nProbeEntries = 4,
           nReleaseEntries = 4,
           nStoreReplayEntries = 4,
         ),
-        L2Size = 128 * 1024, // 128KB
+        L2Size = 256 * 1024, // 256KB
         L2NWays = 8,
         EnableBPD = false, // disable TAGE
         EnableLoop = false,
@@ -105,9 +105,9 @@ class MinimalConfig(n: Int = 1) extends Config(
         PtwL2EntrySize = 64,
         PtwL3EntrySize = 128,
         PtwSPEntrySize = 2,
-        useFakeL2Cache = true,
+        useFakeL2Cache = false,
       )),
-      L3Size = 32 * 1024, // 32KB
+      L3Size = 2048 * 1024, // 2MB
     )
   })
 )
