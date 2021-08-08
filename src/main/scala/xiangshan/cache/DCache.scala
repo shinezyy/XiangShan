@@ -198,7 +198,10 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
   val singlePort = true
   val readHighPriority = false
 
-  def eccBits = encWordBits - wordBits
+  // println(s"encWordBits = $encWordBits,  wordBits = $wordBits")
+  def eccBits =
+    if (!cacheParams.dataCode.dummy) encWordBits - wordBits
+    else 1
 
   def getECCFromEncWord(encWord: UInt) = {
     require(encWord.getWidth == encWordBits)
@@ -209,7 +212,10 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
     require(row.getWidth == rowBits)
     VecInit((0 until rowWords).map { w =>
       val word = row(wordBits * (w + 1) - 1, wordBits * w)
-      getECCFromEncWord(cacheParams.dataCode.encode(word))
+      if (!cacheParams.dataCode.dummy)
+        getECCFromEncWord(cacheParams.dataCode.encode(word))
+      else
+        0.U(1.W)
     })
   }
 
@@ -328,7 +334,8 @@ class DuplicatedDataArray(implicit p: Parameters) extends AbstractDataArray {
       }
       io.resp(j)(r) := Cat((0 until rowWords) reverseMap {
         k => {
-          val data = Cat(ecc_resp_chosen(k), data_resp_chosen(k))
+          val data = if (!dcacheParameters.dataCode.dummy) Cat(ecc_resp_chosen(k), data_resp_chosen(k))
+                     else data_resp_chosen(k)
           row_error(r)(k) := dcacheParameters.dataCode.decode(data).error && RegNext(rmask(r))
           data
         }

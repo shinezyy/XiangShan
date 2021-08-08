@@ -28,6 +28,7 @@ abstract class Decoding
   def correctable: Bool
   def uncorrectable: Bool // If true, correctable should be ignored
   def error = correctable || uncorrectable
+  def dummy: Boolean = false
 }
 
 abstract class Code
@@ -50,12 +51,14 @@ abstract class Code
    *  For codes for which this operation is not trivial, throw an
    *  UnsupportedOperationException.  */
   def swizzle(x: UInt): UInt
+  def dummy: Boolean = false
 }
 
 class IdentityCode extends Code
 {
   def canDetect = false
   def canCorrect = false
+  override def dummy = true
 
   def width(w0: Int) = w0
   def encode(x: UInt, poison: Bool = false.B) = {
