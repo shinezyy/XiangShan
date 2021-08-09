@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -41,7 +42,7 @@ class XSCoreWithL2()(implicit p: Parameters) extends LazyModule
   with HasXSParameter with HasSoCParameter {
   private val core = LazyModule(new XSCore)
   private val l2prefetcher = LazyModule(new L2Prefetcher())
-  private val l2xbar = TLXbar()
+  private val busPMU = BusPerfMonitor(enable = true)
   private val l2cache = if (useFakeL2Cache) null else LazyModule(new InclusiveCache(
     CacheParameters(
       level = 2,
@@ -69,21 +70,20 @@ class XSCoreWithL2()(implicit p: Parameters) extends LazyModule
   val uncache = TLXbar()
 
   if (!useFakeDCache) {
-    l2xbar := TLBuffer() := core.memBlock.dcache.clientNode
+    busPMU := TLBuffer() := core.memBlock.dcache.clientNode
   }
   if (!useFakeL1plusCache) {
-    l2xbar := TLBuffer() := core.l1pluscache.clientNode
+    busPMU := TLBuffer() := core.l1pluscache.clientNode
   }
   if (!useFakePTW) {
-    l2xbar := TLBuffer() := core.ptw.node
+    busPMU := TLBuffer() := core.ptw.node
   }
-  l2xbar := TLBuffer() := l2prefetcher.clientNode
+  busPMU := TLBuffer() := l2prefetcher.clientNode
   if (useFakeL2Cache) {
-    memory_port := l2xbar
+    memory_port := busPMU
   }
   else {
-    l2cache.node := TLBuffer() := l2xbar
-    memory_port := l2cache.node
+    memory_port := l2cache.node := TLBuffer() := TLXbar() :=* busPMU
   }
 
   uncache := TLBuffer() := core.frontend.instrUncache.clientNode
@@ -351,7 +351,7 @@ class XSTopWithoutDMA()(implicit p: Parameters) extends BaseXSSoc()
     bankedNode :*= l3Ignore :*= l3_xbar
   }
   else {
-    bankedNode :*= l3cache.node :*= TLBuffer() :*= l3_xbar
+    bankedNode :*= l3cache.node :*= BusPerfMonitor(enable = true) :*= TLBuffer() :*= l3_xbar
   }
 
   lazy val module = new LazyRawModuleImp(this) {

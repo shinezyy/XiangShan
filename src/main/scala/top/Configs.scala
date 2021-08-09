@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -95,8 +96,6 @@ class MinimalConfig(n: Int = 1) extends Config(
           nReleaseEntries = 4,
           nStoreReplayEntries = 4,
         ),
-        L2Size = 256 * 1024, // 256KB
-        L2NWays = 8,
         EnableBPD = false, // disable TAGE
         EnableLoop = false,
         TlbEntrySize = 4,
@@ -105,9 +104,9 @@ class MinimalConfig(n: Int = 1) extends Config(
         PtwL2EntrySize = 64,
         PtwL3EntrySize = 128,
         PtwSPEntrySize = 2,
-        useFakeL2Cache = false,
+        useFakeL2Cache = true, // disable L2 Cache
       )),
-      L3Size = 2048 * 1024, // 2MB
+      L3Size = 256 * 1024, // 256KB L3 Cache
     )
   })
 )
@@ -122,6 +121,44 @@ class MinimalSimConfig(n: Int = 1) extends Config(
         useFakeL1plusCache = true,
       )),
       useFakeL3Cache = true
+    )
+  })
+)
+
+
+class FuncWarmupConfig(n: Int = 1) extends Config(
+  new DefaultConfig(n).alter((site, here, up) => {
+    case SoCParamsKey => up(SoCParamsKey).copy(
+      cores = up(SoCParamsKey).cores.map(_.copy(
+        icacheParameters = ICacheParameters(
+          tagECC = Some("none"),
+          dataECC = Some("none"),
+        ),
+        dcacheParameters = DCacheParameters(
+          tagECC = Some("none"),
+          dataECC = Some("none"),
+        ),
+      ))
+    )
+  })
+)
+
+class FuncWarmupSmallConfig(n: Int = 1) extends Config(
+  new MinimalConfig(n).alter((site, here, up) => {
+    case SoCParamsKey => up(SoCParamsKey).copy(
+      cores = up(SoCParamsKey).cores.map(_.copy(
+        icacheParameters = ICacheParameters(
+          tagECC = Some("none"),
+          dataECC = Some("none"),
+        ),
+        dcacheParameters = DCacheParameters(
+          tagECC = Some("none"),
+          dataECC = Some("none"),
+        ),
+        useFakeL2Cache = false
+      )),
+      useFakeL3Cache = false,
+      L3Size = 2048 * 1024 // 2MB L3 Cache
     )
   })
 )

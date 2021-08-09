@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -93,6 +94,10 @@ object chiseltest extends CommonModule with SbtModule {
   def chisel3Module: Option[PublishModule] = Some(chiselSrc)
 }
 
+object difftest extends SbtModule with CommonModule {
+  override def millSourcePath = os.pwd / "difftest"
+  override def ivyDeps = super.ivyDeps() ++ chisel
+}
 
 object XiangShan extends CommonModule with SbtModule {
   override def millSourcePath = millOuterCtx.millSourcePath
@@ -105,6 +110,7 @@ object XiangShan extends CommonModule with SbtModule {
     `block-inclusivecache-sifive`,
     chiselSrc,
     chiseltest
+    difftest
   )
 
   object test extends Tests {

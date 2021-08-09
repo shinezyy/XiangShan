@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -228,4 +229,6 @@ class DispatchQueue(size: Int, enqnum: Int, deqnum: Int, name: String)(implicit 
   XSPerfAccumulate("in", numEnq)
   XSPerfAccumulate("out", PopCount(io.deq.map(_.fire())))
   XSPerfAccumulate("out_try", PopCount(io.deq.map(_.valid)))
+  val fake_block = currentValidCounter <= (size - enqnum).U && !canEnqueue
+  XSPerfAccumulate("fake_block", fake_block)
 }

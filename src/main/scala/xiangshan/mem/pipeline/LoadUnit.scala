@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -22,6 +23,7 @@ import utils._
 import xiangshan._
 import xiangshan.backend.decode.ImmUnion
 import xiangshan.cache._
+import xiangshan.cache.mmu.{TlbRequestIO, TlbReq, TlbResp, TlbCmd}
 
 class LoadToLsqIO(implicit p: Parameters) extends XSBundle {
   val loadIn = ValidIO(new LsPipelineBundle)
@@ -133,14 +135,16 @@ class LoadUnit_S1(implicit p: Parameters) extends XSModule {
   io.dcacheKill := s1_tlb_miss || s1_exception || s1_mmio
 
   // load forward query datapath
-  io.sbuffer.valid := io.in.valid
+  io.sbuffer.valid := io.in.valid && !(s1_exception || s1_tlb_miss)
+  io.sbuffer.vaddr := io.in.bits.vaddr
   io.sbuffer.paddr := s1_paddr
   io.sbuffer.uop := s1_uop
   io.sbuffer.sqIdx := s1_uop.sqIdx
   io.sbuffer.mask := s1_mask
   io.sbuffer.pc := s1_uop.cf.pc // FIXME: remove it
 
-  io.lsq.valid := io.in.valid
+  io.lsq.valid := io.in.valid && !(s1_exception || s1_tlb_miss)
+  io.lsq.vaddr := io.in.bits.vaddr
   io.lsq.paddr := s1_paddr
   io.lsq.uop := s1_uop
   io.lsq.sqIdx := s1_uop.sqIdx
@@ -188,6 +192,9 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper {
   val s2_mmio = io.in.bits.mmio && !s2_exception
   val s2_cache_miss = io.dcacheResp.bits.miss
   val s2_cache_replay = io.dcacheResp.bits.replay
+  val s2_forward_fail = io.lsq.matchInvalid || io.sbuffer.matchInvalid
+  // assert(!s2_forward_fail)
+  XSPerfAccumulate("s2_forward_fail", s2_forward_fail)
 
   io.dcacheResp.ready := true.B
   val dcacheShouldResp = !(s2_tlb_miss || s2_exception || s2_mmio)
@@ -198,14 +205,14 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper {
   io.rsFeedback.bits.hit := !s2_tlb_miss && (!s2_cache_replay || s2_mmio || s2_exception) && !s2_data_invalid
   io.rsFeedback.bits.rsIdx := io.in.bits.rsIdx
   io.rsFeedback.bits.flushState := io.in.bits.ptwBack
-  io.rsFeedback.bits.sourceType := Mux(s2_tlb_miss, RSFeedbackType.tlbMiss, 
+  io.rsFeedback.bits.sourceType := Mux(s2_tlb_miss, RSFeedbackType.tlbMiss,
     Mux(io.lsq.dataInvalid,
       RSFeedbackType.dataInvalid,
       RSFeedbackType.mshrFull
     )
   )
 
-  // s2_cache_replay is quite slow to generate, send it separately to LQ 
+  // s2_cache_replay is quite slow to generate, send it separately to LQ
   io.needReplayFromRS := s2_cache_replay
 
   // merge forward result
@@ -245,7 +252,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper {
   ))
   val rdataPartialLoad = rdataHelper(s2_uop, rdataSel)
 
-  io.out.valid := io.in.valid && !s2_tlb_miss && !s2_data_invalid
+  io.out.valid := io.in.valid && !s2_tlb_miss && !s2_data_invalid // && !s2_forward_fail
   // Inst will be canceled in store queue / lsq,
   // so we do not need to care about flush in load / store unit's out.valid
   io.out.bits := io.in.bits
@@ -260,7 +267,7 @@ class LoadUnit_S2(implicit p: Parameters) extends XSModule with HasLoadHelper {
   // We use io.dataForwarded instead. It means forward logic have prepared all data needed,
   // and dcache query is no longer needed.
   // Such inst will be writebacked from load queue.
-  io.dataForwarded := s2_cache_miss && fullForward && !s2_exception
+  io.dataForwarded := s2_cache_miss && fullForward && !s2_exception && !s2_forward_fail
   // io.out.bits.forwardX will be send to lq
   io.out.bits.forwardMask := forwardMask
   // data retbrived from dcache is also included in io.out.bits.forwardData
@@ -296,7 +303,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper {
     val dtlb = new TlbRequestIO()
     val sbuffer = new LoadForwardQueryIO
     val lsq = new LoadToLsqIO
-    val fastUop = ValidIO(new MicroOp) // early wakup signal generated in load_s1
+    val fastUop = ValidIO(new MicroOp) // early wakeup signal generated in load_s1
   })
 
   val load_s0 = Module(new LoadUnit_S0)
@@ -323,9 +330,11 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper {
   load_s2.io.lsq.forwardData <> io.lsq.forward.forwardData
   load_s2.io.lsq.forwardMask <> io.lsq.forward.forwardMask
   load_s2.io.lsq.dataInvalid <> io.lsq.forward.dataInvalid
+  load_s2.io.lsq.matchInvalid <> io.lsq.forward.matchInvalid
   load_s2.io.sbuffer.forwardData <> io.sbuffer.forwardData
   load_s2.io.sbuffer.forwardMask <> io.sbuffer.forwardMask
   load_s2.io.sbuffer.dataInvalid <> io.sbuffer.dataInvalid // always false
+  load_s2.io.sbuffer.matchInvalid <> io.sbuffer.matchInvalid
   load_s2.io.dataForwarded <> io.lsq.loadDataForwarded
   io.rsFeedback.bits := RegNext(load_s2.io.rsFeedback.bits)
   io.rsFeedback.valid := RegNext(load_s2.io.rsFeedback.valid && !load_s2.io.out.bits.uop.roqIdx.needFlush(io.redirect, io.flush))
@@ -339,7 +348,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper {
   // load_s2.io.dcacheResp.bits.data := Mux1H(RegNext(io.dcache.s1_hit_way), RegNext(io.dcache.s1_data))
   // assert(load_s2.io.dcacheResp.bits.data === io.dcache.resp.bits.data)
 
-  io.fastUop.valid := io.dcache.s1_hit_way.orR && !io.dcache.s1_disable_fast_wakeup && load_s1.io.in.valid && 
+  io.fastUop.valid := io.dcache.s1_hit_way.orR && !io.dcache.s1_disable_fast_wakeup && load_s1.io.in.valid &&
     !load_s1.io.dcacheKill && !io.lsq.forward.dataInvalidFast
   io.fastUop.bits := load_s1.io.out.bits.uop
 

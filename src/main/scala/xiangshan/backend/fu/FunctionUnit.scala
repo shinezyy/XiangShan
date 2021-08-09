@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -18,6 +19,7 @@ package xiangshan.backend.fu
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import utils.XSPerfAccumulate
 import xiangshan._
 import xiangshan.backend.fu.fpu._
 
@@ -72,7 +74,14 @@ abstract class FunctionUnit(len: Int = 64)(implicit p: Parameters) extends XSMod
 
   val io = IO(new FunctionUnitIO(len))
 
+  XSPerfAccumulate("in_valid", io.in.valid)
+  XSPerfAccumulate("in_fire", io.in.fire)
+  XSPerfAccumulate("out_valid", io.out.valid)
+  XSPerfAccumulate("out_fire", io.out.fire)
+
 }
+
+abstract class FUWithRedirect(len: Int = 64)(implicit p: Parameters) extends FunctionUnit(len: Int) with HasRedirectOut
 
 trait HasPipelineReg {
   this: FunctionUnit =>

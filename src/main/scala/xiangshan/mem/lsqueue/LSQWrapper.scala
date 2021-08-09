@@ -1,5 +1,6 @@
 /***************************************************************************************
 * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+* Copyright (c) 2020-2021 Peng Cheng Laboratory
 *
 * XiangShan is licensed under Mulan PSL v2.
 * You can use this software according to the terms and conditions of the Mulan PSL v2.
@@ -21,7 +22,8 @@ import chisel3.util._
 import utils._
 import xiangshan._
 import xiangshan.cache._
-import xiangshan.cache.{DCacheWordIO, DCacheLineIO, TlbRequestIO, MemoryOpConstants}
+import xiangshan.cache.{DCacheWordIO, DCacheLineIO, MemoryOpConstants}
+import xiangshan.cache.mmu.{TlbRequestIO}
 import xiangshan.mem._
 import xiangshan.backend.roq.RoqLsqIO
 
@@ -60,7 +62,7 @@ class LsqWrappper(implicit p: Parameters) extends XSModule with HasDCacheParamet
     val storeDataIn = Vec(StorePipelineWidth, Flipped(Valid(new StoreDataBundle))) // store data, send to sq from rs
     val loadDataForwarded = Vec(LoadPipelineWidth, Input(Bool()))
     val needReplayFromRS = Vec(LoadPipelineWidth, Input(Bool()))
-    val sbuffer = Vec(StorePipelineWidth, Decoupled(new DCacheWordReq))
+    val sbuffer = Vec(StorePipelineWidth, Decoupled(new SBufferWordReq))
     val ldout = Vec(2, DecoupledIO(new ExuOutput)) // writeback int load
     val mmioStout = DecoupledIO(new ExuOutput) // writeback uncached store
     val forward = Vec(LoadPipelineWidth, Flipped(new PipeLoadForwardQueryIO))
