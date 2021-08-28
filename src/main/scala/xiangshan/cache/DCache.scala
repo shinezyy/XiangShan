@@ -419,16 +419,12 @@ class L1MetadataArray(onReset: () => L1Metadata)(implicit p: Parameters) extends
     when(io.read.fire()) {
       XSDebug("MetaArray Read: idx: %d way_en: %x tag: %x\n",
         io.read.bits.idx, io.read.bits.way_en, io.read.bits.tag)
-      printf("MetaArray Read: idx: %d way_en: %x tag: %x\n",
-        io.read.bits.idx, io.read.bits.way_en, io.read.bits.tag)
     }
   }
 
   def dumpWrite() = {
     when(io.write.fire()) {
-      // XSDebug("MetaArray Write: idx: %d way_en: %x tag: %x new_tag: %x new_coh: %x\n",
-      //   io.write.bits.idx, io.write.bits.way_en, io.write.bits.tag, io.write.bits.data.tag, io.write.bits.data.coh.state)
-      printf("MetaArray Write: idx: %d way_en: %x tag: %x new_tag: %x new_coh: %x\n",
+      XSDebug("MetaArray Write: idx: %d way_en: %x tag: %x new_tag: %x new_coh: %x\n",
         io.write.bits.idx, io.write.bits.way_en, io.write.bits.tag, io.write.bits.data.tag, io.write.bits.data.coh.state)
     }
   }
@@ -478,9 +474,7 @@ class DuplicatedMetaArray(implicit p: Parameters) extends DCacheModule {
   def dumpRead() = {
     (0 until LoadPipelineWidth) map { w =>
       when(io.read(w).fire()) {
-        // XSDebug(s"MetaArray Read channel: $w idx: %d way_en: %x tag: %x\n",
-        //   io.read(w).bits.idx, io.read(w).bits.way_en, io.read(w).bits.tag)
-        printf(s"MetaArray Read channel: $w idx: %d way_en: %x tag: %x\n",
+        XSDebug(s"MetaArray Read channel: $w idx: %d way_en: %x tag: %x\n",
           io.read(w).bits.idx, io.read(w).bits.way_en, io.read(w).bits.tag)
       }
     }

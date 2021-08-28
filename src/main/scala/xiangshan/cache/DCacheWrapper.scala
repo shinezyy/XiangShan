@@ -88,7 +88,6 @@ class Refill(implicit p: Parameters) extends DCacheBundle
   val data   = UInt((cfg.blockBytes * 8).W)
   def dump() = {
     XSDebug("Refill: addr: %x data: %x\n", addr, data)
-    printf("Refill: addr: %x data: %x\n", addr, data)
   }
 }
 
@@ -274,7 +273,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
   io.lsu.lsq <> missQueue.io.refill
 
   when (missQueue.io.refill.valid) {
-    printf("Refilling 0x%x\n", missQueue.io.refill.bits.addr)
+    XSDebug("Refilling 0x%x\n", missQueue.io.refill.bits.addr)
     missQueue.io.refill.bits.dump();
   }
 

@@ -92,7 +92,7 @@ class LoadPipe(implicit p: Parameters) extends DCacheModule {
   s1_ready := !s1_valid || s1_fire
 
   when(s1_fire) {
-    printf("Fire load addr: %x\n", s1_addr)
+    XSDebug("Fire load addr: %x\n", s1_addr)
   }
 
   when (s0_fire) { s1_valid := true.B }
@@ -106,17 +106,17 @@ class LoadPipe(implicit p: Parameters) extends DCacheModule {
   val s1_tag_eq_way = wayMap((w: Int) => meta_resp(w).tag === (get_tag(s1_addr))).asUInt
   val s1_tag_match_way = wayMap((w: Int) => s1_tag_eq_way(w) && meta_resp(w).coh.isValid()).asUInt
   when (s1_valid) {
-    printf(p"s1 Addr: ${Hexadecimal(s1_addr)}\n")
-    meta_resp.foreach(x => printf("0x%x", x.tag))
-    printf(p"Tag eq way: ${Binary(s1_tag_eq_way)}\n")
-    printf(p"Tag match way: ${Binary(s1_tag_eq_way)}\n")
+    XSDebug(p"s1 Addr: ${Hexadecimal(s1_addr)}\n")
+    meta_resp.foreach(x => XSDebug("0x%x", x.tag))
+    XSDebug(p"Tag eq way: ${Binary(s1_tag_eq_way)}\n")
+    XSDebug(p"Tag match way: ${Binary(s1_tag_eq_way)}\n")
   }
   val s1_tag_match = s1_tag_match_way.orR
   assert(RegNext(PopCount(s1_tag_match_way) <= 1.U), "tag should not match with more than 1 way")
   when (s1_tag_match) {
-    printf("Matched addr 0x%x with tag 0x%x\n", s1_addr, (get_tag(s1_addr)).asUInt)
-    printf(p"Matched way: ${Binary(s1_tag_match_way)}\n")
-    printf(p"Matched set: ${get_idx(s1_addr)}\n")
+    XSDebug("Matched addr 0x%x with tag 0x%x\n", s1_addr, (get_tag(s1_addr)).asUInt)
+    XSDebug(p"Matched way: ${Binary(s1_tag_match_way)}\n")
+    XSDebug(p"Matched set: ${get_idx(s1_addr)}\n")
   }
 
   val s1_fake_meta = Wire(new L1Metadata)
@@ -181,8 +181,8 @@ class LoadPipe(implicit p: Parameters) extends DCacheModule {
   val s2_data = data_resp(get_row(s2_addr))
 
   when (s2_valid && s2_hit) {
-    printf("data resp: %x\n", data_resp.asUInt)
-    printf("selected data row: %x\n", s2_data)
+    XSDebug("data resp: %x\n", data_resp.asUInt)
+    XSDebug("selected data row: %x\n", s2_data)
   }
 
   // select the word
