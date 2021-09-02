@@ -181,7 +181,7 @@ class PTEHelper() extends BlackBox {
     val pte    = Output(UInt(64.W))
     val level  = Output(UInt(8.W))
     val pf     = Output(UInt(8.W))
-  })
+  }).suggestName("io")
 }
 
 class FakePTW()(implicit p: Parameters) extends XSModule with HasPtwConst {
