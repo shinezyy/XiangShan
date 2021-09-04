@@ -19,6 +19,7 @@ import mill._
 import scalalib._
 import $file.firrtl.build
 import $file.chisel3.build
+import coursier.maven.MavenRepository
 
 trait CommonModule extends ScalaModule {
   override def scalaVersion = "2.12.10"
@@ -30,6 +31,13 @@ trait CommonModule extends ScalaModule {
   override def compileIvyDeps = Agg(macroParadise)
 
   override def scalacPluginIvyDeps = Agg(macroParadise)
+
+  override def repositoriesTask = T.task {
+    super.repositoriesTask() ++ Seq(
+      MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+    )
+  }
+
 }
 
 object firrtlXS extends firrtl.build.firrtlCrossModule("2.12.13") {
@@ -99,6 +107,10 @@ object difftest extends SbtModule with CommonModule {
   override def moduleDeps = super.moduleDeps ++ Seq(chiselSrc)
 }
 
+object fudian extends CommonModule with SbtModule {
+  override def moduleDeps = super.moduleDeps ++ Seq(chiselSrc)
+}
+
 object XiangShan extends CommonModule with SbtModule {
   override def millSourcePath = millOuterCtx.millSourcePath
 
@@ -110,7 +122,8 @@ object XiangShan extends CommonModule with SbtModule {
     `block-inclusivecache-sifive`,
     chiselSrc,
     chiseltest,
-    difftest
+    difftest,
+    fudian
   )
 
   object test extends Tests {

@@ -19,6 +19,7 @@ package xiangshan.backend.regfile
 import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
+import Chisel.BlackBox
 import xiangshan._
 
 class RfReadPort(len: Int)(implicit p: Parameters) extends XSBundle {

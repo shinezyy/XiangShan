@@ -25,3 +25,6 @@
 [submodule "chisel3"]
 	path = chisel3
 	url = https://github.com/chipsalliance/chisel3.git
+[submodule "fudian"]
+	path = fudian
+	url = https://github.com/OpenXiangShan/fudian.git
