@@ -517,6 +517,10 @@ abstract class BaseBPU(implicit p: Parameters) extends XSModule with BranchPredi
     }
   }
   val debug_verbose = false
+
+  val numCommittedInstr = io.commit.bits.numCommittedInstr
+  val lastDumpICount = RegInit(0.U(64.W))
+  val dumpInterval = RegInit(1024.U(64.W))
 }
 
 
@@ -651,6 +655,9 @@ class BPU(implicit p: Parameters) extends BaseBPU {
     }
   }
 
+  when (lastDumpICount + dumpInterval >= numCommittedInstr) {
+    lastDumpICount := lastDumpICount + dumpInterval
+  }
 }
 
 object BPU{

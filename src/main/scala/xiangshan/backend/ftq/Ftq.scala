@@ -312,6 +312,7 @@ class Ftq(implicit p: Parameters) extends XSModule with HasCircularQueuePtrHelpe
   ftq_1r_sram.io.ren(0) := true.B
 
   val commitEntry = Wire(new FtqEntry)
+  commitEntry.numCommittedInstr := DontCare
   val commit_valids = VecInit(commitStateQueue(headPtr.value).map(s => s === s_commited))
   // set state to invalid next cycle
   commitStateQueue(headPtr.value).zip(commit_valids).foreach({ case (s, v) => when(v) {

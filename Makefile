@@ -105,6 +105,10 @@ bump:
 bsp:
 	mill -i mill.bsp.BSP/install
 
+emu-cpp:
+	$(MAKE) -C ./difftest $(shell pwd)/build/emu-compile/VSimTop.mk \
+		SIM_TOP=SimTop DESIGN_DIR=$(NOOP_HOME) NUM_CORES=$(NUM_CORES)
+
 # verilator simulation
 emu:
 	$(MAKE) -C ./difftest emu SIM_TOP=SimTop DESIGN_DIR=$(NOOP_HOME) NUM_CORES=$(NUM_CORES)

@@ -232,6 +232,7 @@ class FtqEntry(implicit p: Parameters) extends XSBundle {
   // backend update
   val mispred = Vec(PredictWidth, Bool())
   val target = UInt(VAddrBits.W)
+  val numCommittedInstr = UInt(64.W)
 
   // For perf counters
   val pd = Vec(PredictWidth, new PreDecodeInfoForDebug(!env.FPGAPlatform))

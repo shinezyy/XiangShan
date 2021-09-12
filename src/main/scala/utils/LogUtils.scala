@@ -118,3 +118,10 @@ object XSInfo extends LogHelper(XSLogLevel.INFO)
 object XSWarn extends LogHelper(XSLogLevel.WARN)
 
 object XSError extends LogHelper(XSLogLevel.ERROR)
+
+object CondLog {
+  val traceDump = true
+  def enableTraceDump(): Boolean = {
+    traceDump
+  }
+}

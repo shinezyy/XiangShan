@@ -115,7 +115,7 @@ class FakeTageTable()(implicit p: Parameters) extends TageModule {
 @chiselName
 class TageTable
 (
-  val nRows: Int, val histLen: Int, val tagLen: Int, val uBitPeriod: Int
+  val nRows: Int, val histLen: Int, val tagLen: Int, val uBitPeriod: Int, val tableID: Int
 )(implicit p: Parameters)
   extends TageModule with HasFoldedHistory {
   val io = IO(new Bundle() {
@@ -144,6 +144,8 @@ class TageTable
     val ctr = UInt(TageCtrBits.W)
   }
 
+  val TageEntryBits = 1 + tagLen + TageCtrBits
+
   val tageEntrySz = instOffsetBits + tagLen + TageCtrBits
 
   def getUnhashedIdx(pc: UInt) = pc >> (instOffsetBits+log2Ceil(TageBanks))
@@ -156,7 +158,8 @@ class TageTable
 
   val hi_us = Module(new SRAMTemplate(Bool(), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
   val lo_us = Module(new SRAMTemplate(Bool(), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
-  val table = Module(new SRAMTemplate(new TageEntry, set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
+  val table = Module(new SRAMTemplate(Bits(TageEntryBits.W), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
+  println(s"The size of Tage Entry: $TageEntryBits")
 
   table.io.r.req.valid := io.req.valid
   hi_us.io.r.req.valid := io.req.valid
@@ -167,7 +170,7 @@ class TageTable
 
   val if3_hi_us_r = hi_us.io.r.resp.data
   val if3_lo_us_r = lo_us.io.r.resp.data
-  val if3_table_r = table.io.r.resp.data
+  val if3_table_r = table.io.r.resp.data.asTypeOf(Vec(TageBanks, new TageEntry))
 
   val if2_mask = io.req.bits.mask
   val if3_mask = RegEnable(if2_mask, enable=io.req.valid)
@@ -195,13 +198,24 @@ class TageTable
   val (update_idx, update_tag) = compute_tag_and_hash(getUnhashedIdx(io.update.pc), io.update.hist)
 
   val update_wdata = Wire(Vec(TageBanks, new TageEntry))
+  println(s"update_wdata width: ${update_wdata.asUInt().getWidth}")
+  val update_wdata_bits = Wire(Vec(TageBanks, UInt(TageEntryBits.W)))
+  update_wdata_bits := update_wdata.asTypeOf(Vec(TageBanks, UInt(TageEntryBits.W)))
+  println(s"update_wdata_bits width: ${update_wdata.asUInt().getWidth}")
 
   table.io.w.apply(
     valid = io.update.mask.asUInt.orR,
-    data = update_wdata,
+    data = update_wdata_bits,
     setIdx = update_idx,
     waymask = io.update.mask.asUInt
   )
+
+  if (CondLog.enableTraceDump) {
+    when (io.update.mask.asUInt.orR) {
+      printf(p"Tage $tableID update, pc: ${Hexadecimal(io.update.pc)}, ${Binary(io.update.pc)}, hist: ${Binary(io.update.hist)} " +
+      p"set: $update_idx, data: $update_wdata_bits, way mask: ${OHToUInt(io.update.mask)}\n")
+    }
+  }
 
   val update_hi_wdata = Wire(Vec(TageBanks, Bool()))
   hi_us.io.w.apply(
@@ -340,6 +354,13 @@ class TageTable
     (0 until TageBanks).map( b => { XSDebug("Bank(%d): %d out of %d rows are valid\n", b.U, PopCount(valids(b)), nRows.U)})
   }
 
+  def dump() = {
+    (0 until TageBanks).foreach {
+      b => (0 until nRows).foreach {
+        r => table
+      }
+    }
+  }
 }
 
 abstract class BaseTage(implicit p: Parameters) extends BasePredictor with HasTageParameter {
@@ -370,9 +391,9 @@ class FakeTage(implicit p: Parameters) extends BaseTage {
 @chiselName
 class Tage(implicit p: Parameters) extends BaseTage {
 
-  val tables = TableInfo.map {
-    case (nRows, histLen, tagLen) =>
-      val t = if(EnableBPD) Module(new TageTable(nRows, histLen, tagLen, UBitPeriod)) else Module(new FakeTageTable)
+  val tables = TableInfo.zipWithIndex.map {
+    case((nRows, histLen, tagLen), id) =>
+      val t = if(EnableBPD) Module(new TageTable(nRows, histLen, tagLen, UBitPeriod, id)) else Module(new FakeTageTable)
       t.io.req.valid := io.pc.valid
       t.io.req.bits.pc := io.pc.bits
       t.io.req.bits.hist := io.hist

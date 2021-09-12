@@ -278,6 +278,7 @@ class Roq(numWbPorts: Int)(implicit p: Parameters) extends XSModule with HasCirc
     val roqDeqPtr = Output(new RoqPtr)
     val csr = new RoqCSRIO
     val roqFull = Output(Bool())
+    val numCommittedInstr = Output(UInt(64.W))
   })
 
   println("Roq: size:" + RoqSize + " wbports:" + numWbPorts  + " commitwidth:" + CommitWidth)
@@ -815,6 +816,13 @@ class Roq(numWbPorts: Int)(implicit p: Parameters) extends XSModule with HasCirc
     if(i % 4 == 3) XSDebug(false, true.B, "\n")
   }
 
+  val numCommittedInstr = RegInit(0.U(64.W))
+  when (!io.commits.isWalk) {
+      numCommittedInstr := numCommittedInstr + PopCount(io.commits.valid)
+  }
+
+  io.numCommittedInstr := numCommittedInstr
+
   XSPerfAccumulate("clock_cycle", 1.U)
   QueuePerf(RoqSize, PopCount((0 until RoqSize).map(valid(_))), !allowEnqueue)
   io.roqFull := !allowEnqueue
@@ -885,6 +893,7 @@ class Roq(numWbPorts: Int)(implicit p: Parameters) extends XSModule with HasCirc
   val trapCode = PriorityMux(wdata.zip(trapVec).map(x => x._2 -> x._1))
   val trapPC = SignExt(PriorityMux(wpc.zip(trapVec).map(x => x._2 ->x._1)), XLEN)
 
+  val any_commit = io.commits.valid.reduce(_||_) && !io.commits.isWalk
   if (!env.FPGAPlatform) {
     for (i <- 0 until CommitWidth) {
       val difftest = Module(new DifftestInstrCommit)
@@ -910,6 +919,14 @@ class Roq(numWbPorts: Int)(implicit p: Parameters) extends XSModule with HasCirc
       difftest.io.wdest    := RegNext(uop.ctrl.ldest)
 
       // XSDebug(p"[difftest-instr-commit]valid:${difftest.io.valid},pc:${difftest.io.pc},instr:${difftest.io.instr},skip:${difftest.io.skip},isRVC:${difftest.io.isRVC},scFailed:${difftest.io.scFailed},wen:${difftest.io.wen},wdata:${difftest.io.wdata},wdest:${difftest.io.wdest}\n")
+      if (CondLog.enableTraceDump) {
+        when(any_commit) {
+          printf(p"[Trace] numInst: ${numCommittedInstr}, valid: ${io.commits.valid(i) && !io.commits.isWalk}, pc: ${Binary(SignExt(uop.cf.pc, XLEN))}, " +
+          p"fu_type: ${Binary(uop.ctrl.fuType)}, fu_op_type: ${Binary(uop.ctrl.fuOpType)}, " +
+          p"is_rvc: ${uop.cf.pd.isRVC}, is_branch: ${uop.cf.pd.isBr}, is_jal: ${uop.cf.pd.isJal}, is_jalr: ${uop.cf.pd.isJalr}, " +
+          p"reg_wen: ${io.commits.valid(i) && uop.ctrl.rfWen && uop.ctrl.ldest =/= 0.U}, wdata: ${Hexadecimal(exuData)}\n")
+        }
+      }
     }
   }
 

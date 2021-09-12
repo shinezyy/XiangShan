@@ -20,6 +20,7 @@ import scalalib._
 import $file.firrtl.build
 import $file.chisel3.build
 import coursier.maven.MavenRepository
+import $ivy.`com.lihaoyi::mill-contrib-bloop:0.9.8`
 
 trait CommonModule extends ScalaModule {
   override def scalaVersion = "2.12.10"

@@ -296,6 +296,7 @@ class CtrlBlock(implicit p: Parameters) extends XSModule
 
   io.frontend.redirect_cfiUpdate := Mux(flushRedirectReg.valid, flushRedirectReg, frontendRedirect)
   io.frontend.commit_cfiUpdate := ftq.io.commit_ftqEntry
+  io.frontend.commit_cfiUpdate.bits.numCommittedInstr := roq.io.numCommittedInstr
   io.frontend.ftqEnqPtr := ftq.io.enqPtr
   io.frontend.ftqLeftOne := ftq.io.leftOne
 
