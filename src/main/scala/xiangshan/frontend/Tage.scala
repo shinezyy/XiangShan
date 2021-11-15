@@ -159,7 +159,7 @@ class TageTable
   val hi_us = Module(new SRAMTemplate(Bool(), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
   val lo_us = Module(new SRAMTemplate(Bool(), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
   val table = Module(new SRAMTemplate(Bits(TageEntryBits.W), set=nRows, way=TageBanks, shouldReset=true, holdRead=true, singlePort=false))
-  println(s"The size of Tage Entry: $TageEntryBits")
+  println(s"Table ID: $tableID, The size of Tage Entry: $TageEntryBits, history len: $histLen, tag len: $tagLen")
 
   table.io.r.req.valid := io.req.valid
   hi_us.io.r.req.valid := io.req.valid
@@ -198,10 +198,10 @@ class TageTable
   val (update_idx, update_tag) = compute_tag_and_hash(getUnhashedIdx(io.update.pc), io.update.hist)
 
   val update_wdata = Wire(Vec(TageBanks, new TageEntry))
-  println(s"update_wdata width: ${update_wdata.asUInt().getWidth}")
+  // println(s"update_wdata width: ${update_wdata.asUInt().getWidth}")
   val update_wdata_bits = Wire(Vec(TageBanks, UInt(TageEntryBits.W)))
   update_wdata_bits := update_wdata.asTypeOf(Vec(TageBanks, UInt(TageEntryBits.W)))
-  println(s"update_wdata_bits width: ${update_wdata.asUInt().getWidth}")
+  // println(s"update_wdata_bits width: ${update_wdata.asUInt().getWidth}")
 
   table.io.w.apply(
     valid = io.update.mask.asUInt.orR,
@@ -209,13 +209,6 @@ class TageTable
     setIdx = update_idx,
     waymask = io.update.mask.asUInt
   )
-
-  if (CondLog.enableTraceDump) {
-    when (io.update.mask.asUInt.orR) {
-      printf(p"Tage $tableID update, pc: ${Hexadecimal(io.update.pc)}, ${Binary(io.update.pc)}, hist: ${Binary(io.update.hist)} " +
-      p"set: $update_idx, data: $update_wdata_bits, way mask: ${OHToUInt(io.update.mask)}\n")
-    }
-  }
 
   val update_hi_wdata = Wire(Vec(TageBanks, Bool()))
   hi_us.io.w.apply(
@@ -299,7 +292,15 @@ class TageTable
       }
     }
   }
-  
+
+  if (CondLog.enableTraceDump) {
+    when (io.update.mask.asUInt.orR) {
+      printf(p"Tage $tableID update, pc: ${Hexadecimal(io.update.pc)}, ${Binary(io.update.pc)}, hist: ${Binary(io.update.hist)} " +
+      p"set: $update_idx, data: $update_wdata_bits, way mask: ${OHToUInt(io.update.mask)}, update_tag: ${Binary(update_tag)}, " +
+      p"historyLen: ${histLen}\n")
+    }
+  }
+
   when (io.update.mask.reduce(_||_) && !wrbypass_hit) {
     wrbypass_tags(wrbypass_enq_idx) := update_tag
     wrbypass_idxs(wrbypass_enq_idx) := update_idx
